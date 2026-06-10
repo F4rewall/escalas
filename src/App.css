@@ -1,0 +1,13 @@
+/* App Specific Utilities */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* responsive grids and padding adjusters */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 1.5rem 0.75rem 3rem 0.75rem;
+  }
+}
