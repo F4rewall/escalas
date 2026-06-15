@@ -86,14 +86,14 @@ export default function Dashboard({ setActiveTab }) {
   return (
     <div>
       {/* Hero Welcome banner */}
-      <div className="glass-panel" style={styles.hero}>
+      <div className="glass-panel hero-card">
         <div style={styles.heroContent}>
-          <h1 style={styles.heroTitle}>Ad Maiorem Dei Gloriam</h1>
+          <h1 className="hero-title">Ad Maiorem Dei Gloriam</h1>
           <p style={styles.heroText}>
             Portal Litúrgico da Paróquia de Santo Antônio. Organização, compromisso e zelo nas escalas dos Coroinhas e Cerimoniários para o serviço do Altar.
           </p>
           {userRole !== 'admin' && (
-            <button className="btn btn-primary" onClick={() => setActiveTab('schedules')} style={{ marginTop: '1rem' }}>
+            <button className="btn btn-primary" onClick={() => setActiveTab('schedules')} style={{ marginTop: '1.25rem' }}>
               Ver Minhas Escalas <ArrowRight size={16} />
             </button>
           )}
@@ -102,8 +102,8 @@ export default function Dashboard({ setActiveTab }) {
 
       {/* Grid of stats */}
       <div style={styles.statsGrid}>
-        <div className="glass-panel" style={styles.statCard}>
-          <div style={styles.statIconWrapper('#10b981')}>
+        <div className="dashboard-stat-card">
+          <div className="dashboard-stat-icon-wrapper" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
             <TrendingUp size={24} style={{ color: '#10b981' }} />
           </div>
           <div>
@@ -112,8 +112,8 @@ export default function Dashboard({ setActiveTab }) {
           </div>
         </div>
 
-        <div className="glass-panel" style={styles.statCard}>
-          <div style={styles.statIconWrapper('#8b5cf6')}>
+        <div className="dashboard-stat-card">
+          <div className="dashboard-stat-icon-wrapper" style={{ backgroundColor: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
             <Users size={24} style={{ color: '#8b5cf6' }} />
           </div>
           <div>
@@ -122,8 +122,8 @@ export default function Dashboard({ setActiveTab }) {
           </div>
         </div>
 
-        <div className="glass-panel" style={styles.statCard}>
-          <div style={styles.statIconWrapper('var(--primary-gold)')}>
+        <div className="dashboard-stat-card">
+          <div className="dashboard-stat-icon-wrapper" style={{ backgroundColor: 'rgba(217, 119, 6, 0.15)', border: '1px solid rgba(217, 119, 6, 0.2)' }}>
             <Calendar size={24} style={{ color: 'var(--primary-gold)' }} />
           </div>
           <div>
@@ -132,8 +132,8 @@ export default function Dashboard({ setActiveTab }) {
           </div>
         </div>
 
-        <div className="glass-panel" style={styles.statCard}>
-          <div style={styles.statIconWrapper('#14b8a6')}>
+        <div className="dashboard-stat-card">
+          <div className="dashboard-stat-icon-wrapper" style={{ backgroundColor: 'rgba(20, 184, 166, 0.15)', border: '1px solid rgba(20, 184, 166, 0.2)' }}>
             <Church size={24} style={{ color: '#14b8a6' }} />
           </div>
           <div>
@@ -206,7 +206,7 @@ export default function Dashboard({ setActiveTab }) {
               <div style={styles.actionGrid}>
                 <button 
                   onClick={() => setActiveTab('schedules')} 
-                  style={styles.actionBtn}
+                  className="dashboard-action-btn"
                 >
                   <ClipboardCheck size={20} style={{ color: 'var(--primary-gold)' }} />
                   <div>
@@ -217,7 +217,7 @@ export default function Dashboard({ setActiveTab }) {
 
                 <button 
                   onClick={() => setActiveTab('profiles')} 
-                  style={styles.actionBtn}
+                  className="dashboard-action-btn"
                 >
                   <UserPlus size={20} style={{ color: '#8b5cf6' }} />
                   <div>
@@ -228,7 +228,7 @@ export default function Dashboard({ setActiveTab }) {
 
                 <button 
                   onClick={() => setActiveTab('chapels')} 
-                  style={styles.actionBtn}
+                  className="dashboard-action-btn"
                 >
                   <Plus size={20} style={{ color: '#14b8a6' }} />
                   <div>
@@ -244,8 +244,8 @@ export default function Dashboard({ setActiveTab }) {
                       alert("Sistema redefinido com sucesso! Todos os dados de teste foram apagados.");
                     }
                   }} 
+                  className="dashboard-action-btn"
                   style={{
-                    ...styles.actionBtn,
                     borderColor: 'rgba(239, 68, 68, 0.3)',
                     backgroundColor: 'rgba(239, 68, 68, 0.05)'
                   }}

@@ -121,7 +121,7 @@ export default function Chapels() {
 
       <div className="grid-cards">
         {chapels.map(chapel => (
-          <div key={chapel.id} className="glass-panel" style={styles.chapelCard}>
+          <div key={chapel.id} className="chapel-card">
             <div style={styles.cardHeader}>
               <div style={styles.chapelIconWrapper}>
                 <Church size={22} style={{ color: 'var(--primary-gold)' }} />

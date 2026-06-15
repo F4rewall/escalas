@@ -50,6 +50,10 @@ function AppContent() {
 
   return (
     <div className="app-container">
+      {/* Ambient background glow orbs */}
+      <div className="ambient-glow-1"></div>
+      <div className="ambient-glow-2"></div>
+
       {/* Top Navbar */}
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
 

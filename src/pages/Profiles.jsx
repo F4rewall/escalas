@@ -237,11 +237,7 @@ export default function Profiles() {
             return (
               <div 
                 key={server.id} 
-                className="glass-panel profiles-card-container" 
-                style={{
-                  ...styles.profileCard,
-                  ...(!server.active ? styles.profileCardInactive : {})
-                }}
+                className={`profile-card ${!server.active ? 'profile-card-inactive' : ''} profiles-card-container`} 
                 onClick={() => openDetailModal(server)}
               >
                 <div style={styles.cardHeader}>

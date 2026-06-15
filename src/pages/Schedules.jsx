@@ -588,8 +588,7 @@ export default function Schedules() {
             return (
               <div 
                 key={sc.id} 
-                className="glass-panel" 
-                style={styles.scheduleCard}
+                className="app-schedule-card" 
                 onClick={() => setSelectedDetailSchedule(sc)}
               >
                 <div style={styles.cardHeader}>
