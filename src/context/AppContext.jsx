@@ -39,7 +39,9 @@ export const AppProvider = ({ children }) => {
     };
 
     const unsubChapels = onSnapshot(collection(db, "chapels"), (snapshot) => {
-      setChapels(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const chapelsList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      chapelsList.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      setChapels(chapelsList);
       checkLoading();
     }, (err) => {
       console.error("Error loading chapels:", err);
@@ -47,7 +49,9 @@ export const AppProvider = ({ children }) => {
     });
 
     const unsubServers = onSnapshot(collection(db, "servers"), (snapshot) => {
-      setServers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const serversList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      serversList.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      setServers(serversList);
       checkLoading();
     }, (err) => {
       console.error("Error loading servers:", err);
