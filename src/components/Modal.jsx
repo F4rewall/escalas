@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 export default function Modal({ isOpen, onClose, title, children }) {
   // Prevent scrolling when modal is open
@@ -16,7 +17,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="modal-overlay" style={styles.overlay} onClick={onClose}>
       <div 
         className="glass-panel modal-container" 
@@ -33,7 +34,8 @@ export default function Modal({ isOpen, onClose, title, children }) {
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -63,6 +65,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     maxHeight: '90vh',
+    overflow: 'hidden',
     animation: 'modalIn var(--transition-normal) cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
   },
   header: {
