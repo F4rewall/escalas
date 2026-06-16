@@ -943,16 +943,18 @@ export default function Schedules() {
                   
                   {userRole === 'admin' && (
                     <div style={{ display: 'flex', gap: '0.35rem' }}>
-                      <button 
-                        style={styles.editBtn} 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditModal(sc);
-                        }}
-                        title="Editar Escala"
-                      >
-                        <Edit3 size={14} />
-                      </button>
+                      {sc.published === false && (
+                        <button 
+                          style={styles.editBtn} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(sc);
+                          }}
+                          title="Editar Escala"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                      )}
                       <button 
                         style={styles.deleteBtn} 
                         onClick={(e) => {
@@ -1608,7 +1610,7 @@ export default function Schedules() {
                           <span style={styles.serverCategoryBadge(server.category)}>C</span>
                           <div>
                             <span style={styles.detailServerName}>{server.name}</span>
-                            <span style={styles.detailServerSub}>Cerimoniário Auxiliar • {server.phone || 'Sem telefone'}</span>
+                            <span style={styles.detailServerSub}>Cerimoniário • {server.phone || 'Sem telefone'}</span>
                           </div>
                         </div>
                         {attRecord && (
