@@ -13,7 +13,8 @@ import {
   Share2,
   Trash2,
   AlertTriangle,
-  KeyRound
+  KeyRound,
+  Edit3
 } from 'lucide-react';
 
 // Helper to get next N Saturdays (dayOfWeek = 6) or Sundays (dayOfWeek = 0)
@@ -269,6 +270,7 @@ export default function Schedules() {
   const [selectedServerIds, setSelectedServerIds] = useState([]);
   const [selectedCeremonialistId, setSelectedCeremonialistId] = useState('');
   const [selectedAuxCeremonialistIds, setSelectedAuxCeremonialistIds] = useState([]);
+  const [editingSchedule, setEditingSchedule] = useState(null);
 
   // Helper to auto-select the first available mass time
   const autoSelectTime = (chapelId, dateStr) => {
@@ -287,7 +289,7 @@ export default function Schedules() {
 
   // Auto-prefill the first upcoming weekend date when modal opens
   useEffect(() => {
-    if (isCreateModalOpen) {
+    if (isCreateModalOpen && !editingSchedule) {
       const nextSat = getUpcomingWeekendDates(6, 1)[0];
       setScheduleDate(nextSat);
       const defaultChapelId = selectedChapelId || (chapels.length > 0 ? chapels[0].id : '');
@@ -297,7 +299,7 @@ export default function Schedules() {
         setScheduleTime('');
       }
     }
-  }, [isCreateModalOpen, selectedChapelId, chapels]);
+  }, [isCreateModalOpen, selectedChapelId, chapels, editingSchedule]);
 
   // Share Modal States
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -382,12 +384,24 @@ export default function Schedules() {
       alert('Cadastre pelo menos uma capela antes de montar uma escala.');
       return;
     }
+    setEditingSchedule(null);
     setSelectedChapelId(chapels[0].id);
     setScheduleDate('');
     setScheduleTime('');
     setSelectedServerIds([]);
     setSelectedCeremonialistId('');
     setSelectedAuxCeremonialistIds([]);
+    setIsCreateModalOpen(true);
+  };
+
+  const openEditModal = (schedule) => {
+    setEditingSchedule(schedule);
+    setSelectedChapelId(schedule.chapelId);
+    setScheduleDate(schedule.date);
+    setScheduleTime(schedule.time);
+    setSelectedServerIds(schedule.serverIds || []);
+    setSelectedCeremonialistId(schedule.mainCeremonialistId || '');
+    setSelectedAuxCeremonialistIds(schedule.ceremonialistIds || []);
     setIsCreateModalOpen(true);
   };
 
@@ -416,14 +430,23 @@ export default function Schedules() {
       return;
     }
 
-    addSchedule({
+    const scheduleData = {
       chapelId: selectedChapelId,
       date: scheduleDate,
       time: scheduleTime,
       serverIds: selectedServerIds,
       mainCeremonialistId: selectedCeremonialistId,
       ceremonialistIds: selectedAuxCeremonialistIds
-    });
+    };
+
+    if (editingSchedule) {
+      updateSchedule({
+        ...editingSchedule,
+        ...scheduleData
+      });
+    } else {
+      addSchedule(scheduleData);
+    }
 
     setIsCreateModalOpen(false);
   };
@@ -919,18 +942,30 @@ export default function Schedules() {
                   </div>
                   
                   {userRole === 'admin' && (
-                    <button 
-                      style={styles.deleteBtn} 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Tem certeza que deseja excluir esta escala? Isso apagará também os relatórios associados.')) {
-                          deleteSchedule(sc.id);
-                        }
-                      }}
-                      title="Excluir Escala"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button 
+                        style={styles.editBtn} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(sc);
+                        }}
+                        title="Editar Escala"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button 
+                        style={styles.deleteBtn} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Tem certeza que deseja excluir esta escala? Isso apagará também os relatórios associados.')) {
+                            deleteSchedule(sc.id);
+                          }
+                        }}
+                        title="Excluir Escala"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -1102,7 +1137,7 @@ export default function Schedules() {
       <Modal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
-        title="Montar Nova Escala"
+        title={editingSchedule ? "Editar Escala" : "Montar Nova Escala"}
       >
         <form onSubmit={handleCreateScheduleSubmit}>
           <div className="form-group">
@@ -1264,7 +1299,7 @@ export default function Schedules() {
               Cancelar
             </button>
             <button type="submit" className="btn btn-primary">
-              Salvar Escala
+              {editingSchedule ? "Salvar Alterações" : "Salvar Escala"}
             </button>
           </div>
         </form>
@@ -1944,6 +1979,15 @@ const styles = {
     marginBottom: '1rem',
   },
   deleteBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--color-text-muted)',
+    cursor: 'pointer',
+    padding: '0.25rem',
+    borderRadius: '4px',
+    transition: 'all var(--transition-fast)',
+  },
+  editBtn: {
     background: 'none',
     border: 'none',
     color: 'var(--color-text-muted)',
