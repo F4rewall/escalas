@@ -810,8 +810,11 @@ export default function Schedules() {
             }
             
             @media print {
+              @page {
+                margin: 0;
+              }
               body {
-                padding: 0;
+                padding: 2cm;
                 background-color: #fff;
               }
               .container {
@@ -819,6 +822,7 @@ export default function Schedules() {
                 box-shadow: none;
                 border-radius: 0;
                 padding: 30px;
+                margin: 0;
               }
               .schedule-item {
                 background-color: #fff !important;
@@ -830,7 +834,9 @@ export default function Schedules() {
         <body>
           <div class="container">
             <div class="header">
-              <div class="logo">⛪</div>
+              <div class="logo">
+                <img src="/saint_anthony_icon.png" alt="Santo Antônio" style="height: 70px; width: auto;" />
+              </div>
               <h1 class="title">Paróquia de Santo Antônio</h1>
               <p class="subtitle">Escala dos Servidores do Altar</p>
             </div>
