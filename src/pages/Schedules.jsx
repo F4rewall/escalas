@@ -950,10 +950,6 @@ export default function Schedules() {
                         ` : ''}
                       </div>
                     </div>
-
-                    <div class="footer">
-                      Zelo pela Liturgia • Serviço do Altar
-                    </div>
                   </div>
                 </div>
               `;
