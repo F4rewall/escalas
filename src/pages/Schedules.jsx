@@ -36,9 +36,28 @@ const getUpcomingWeekendDates = (dayOfWeek, count = 6) => {
   return dates.map(d => d.toISOString().split('T')[0]);
 };
 
+// Helper to clean up weekday and leading terms from mass time string
+const cleanTimeStr = (mt) => {
+  return mt
+    .replace(/Domingo|Segunda-feira|Segunda|Terça-feira|Terça|Terca|Quarta-feira|Quarta|Quinta-feira|Quinta|Sexta-feira|Sexta|Sábado|Sabado/gi, '')
+    .replace(/^\s*[-–—:]\s*/g, '')
+    .replace(/^\s*(as|às|de|o)\s+/gi, '')
+    .trim();
+};
+
+const formatTime = (time) => {
+  if (!time) return '';
+  if (/^[0-9:]+$/.test(time)) return `${time}h`;
+  return time;
+};
+
 // Helper to filter chapel mass times by selected date's day of week
 const getMassTimesForDate = (chapel, dateStr) => {
-  if (!chapel || !chapel.massTimes || !dateStr) return [];
+  if (!chapel || !chapel.massTimes) return [];
+  
+  if (!dateStr) {
+    return chapel.massTimes.map(cleanTimeStr);
+  }
   
   const dateObj = new Date(dateStr + 'T00:00:00');
   const dayIndex = dateObj.getDay();
@@ -62,12 +81,13 @@ const getMassTimesForDate = (chapel, dateStr) => {
              (dayLower === 'sábado' && mtLower.includes('sabado')) ||
              (dayLower === 'terça-feira' && mtLower.includes('terca'));
     })
-    .map(mt => {
-      const parts = mt.split(' ');
-      return parts[parts.length - 1];
-    });
+    .map(cleanTimeStr);
     
-  return matchingTimes;
+  if (matchingTimes.length > 0) {
+    return matchingTimes;
+  }
+  
+  return chapel.massTimes.map(cleanTimeStr);
 };
 
 // Helper to translate weekday to Portuguese
@@ -450,7 +470,7 @@ export default function Schedules() {
     const dateFormatted = formatDate(schedule.date);
     
     // Q1: Data e horário
-    setReportDataHorario(`${chapelObj.name} - ${dateFormatted} - ${schedule.time}h`);
+    setReportDataHorario(`${chapelObj.name} - ${dateFormatted} - ${formatTime(schedule.time)}`);
     
     // Q2: Cerimoniário principal
     const ceremonialistNames = [
@@ -776,7 +796,7 @@ export default function Schedules() {
                     <h3 class="chapel-name">${chapelName}</h3>
                     <div class="meta-info">
                       <span>📅 ${dateVal} (${dayName})</span>
-                      <span>⏰ ${sc.time}h</span>
+                      <span>⏰ ${formatTime(sc.time)}</span>
                     </div>
                     <div class="team-section">
                       ${ceremonialists.length > 0 ? `
@@ -929,7 +949,7 @@ export default function Schedules() {
                     <h3 className="schedule-card-chapel-title">{chapel.name}</h3>
                     <div className="schedule-card-time-highlight">
                       <Clock size={14} />
-                      <span>{sc.time}h • {getDayNameInPortuguese(sc.date)}</span>
+                      <span>{formatTime(sc.time)} • {getDayNameInPortuguese(sc.date)}</span>
                     </div>
                   </div>
                 </div>
@@ -1493,7 +1513,7 @@ export default function Schedules() {
                   <Clock size={16} style={{ color: 'var(--primary-gold)' }} />
                   <div>
                     <span style={styles.modalDetailMetaLabel}>Horário</span>
-                    <span style={styles.modalDetailMetaVal}>{selectedDetailSchedule.time}h</span>
+                    <span style={styles.modalDetailMetaVal}>{formatTime(selectedDetailSchedule.time)}</span>
                   </div>
                 </div>
               </div>
@@ -1774,7 +1794,7 @@ export default function Schedules() {
                           {chapel.name}
                         </span>
                         <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.1rem' }}>
-                          📅 {formatDate(sc.date)} • ⏰ {sc.time}h {sc.published === false ? '• (Rascunho)' : ''}
+                          📅 {formatDate(sc.date)} • ⏰ {formatTime(sc.time)} {sc.published === false ? '• (Rascunho)' : ''}
                         </span>
                       </div>
                     </label>

@@ -12,6 +12,12 @@ import {
   Trash2
 } from 'lucide-react';
 
+const formatTime = (time) => {
+  if (!time) return '';
+  if (/^[0-9:]+$/.test(time)) return `${time}h`;
+  return time;
+};
+
 export default function Dashboard({ setActiveTab }) {
   const { userRole, servers, chapels, schedules, attendance, clearAllData } = useContext(AppContext);
 
@@ -172,7 +178,7 @@ export default function Dashboard({ setActiveTab }) {
                   
                   <div style={styles.scheduleDetails}>
                     <h4 style={styles.scheduleChapel}>{getChapelName(sc.chapelId)}</h4>
-                    <p style={styles.scheduleTime}>Horário: {sc.time}h</p>
+                    <p style={styles.scheduleTime}>Horário: {formatTime(sc.time)}</p>
                     
                     <div style={styles.scheduleRoles}>
                       {sc.serverIds.length > 0 && (

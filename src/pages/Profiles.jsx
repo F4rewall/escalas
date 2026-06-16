@@ -15,6 +15,12 @@ import {
   Award
 } from 'lucide-react';
 
+const formatTime = (time) => {
+  if (!time) return '';
+  if (/^[0-9:]+$/.test(time)) return `${time}h`;
+  return time;
+};
+
 export default function Profiles() {
   const { 
     userRole, 
@@ -514,7 +520,7 @@ export default function Profiles() {
                         <div style={styles.historyMeta}>
                           <Calendar size={10} /> <span>{formatDate(item.date)}</span>
                           <span style={{ margin: '0 0.25rem' }}>•</span>
-                          <span>{item.time}h</span>
+                          <span>{formatTime(item.time)}</span>
                         </div>
                         {item.justification && (
                           <p style={styles.historyJustification}>
