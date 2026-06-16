@@ -787,10 +787,13 @@ export default function Schedules() {
               color: #0f172a;
               font-weight: 600;
               padding-left: 5px;
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 4px 20px;
             }
 
             .name-item {
-              margin: 5px 0;
+              margin: 3px 0;
               font-size: 1.25rem;
               font-weight: 700;
               color: #0f172a;
