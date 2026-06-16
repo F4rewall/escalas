@@ -657,18 +657,38 @@ export default function Schedules() {
             body {
               font-family: 'Plus Jakarta Sans', sans-serif;
               color: #0f172a;
-              background-color: #ffffff;
+              background-color: #f1f5f9;
               margin: 0;
+              padding: 0;
+            }
+            
+            .schedules-list {
+              display: flex;
+              flex-direction: column;
+              gap: 40px;
+              align-items: center;
               padding: 40px 20px;
             }
             
-            .container {
+            .print-page {
+              background-color: #ffffff;
+              width: 100%;
               max-width: 800px;
-              margin: 0 auto;
-              border: 3px double #d97706;
-              padding: 40px;
-              border-radius: 16px;
+              padding: 1.5cm;
               box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+              box-sizing: border-box;
+              border-radius: 16px;
+              page-break-after: always;
+              page-break-inside: avoid;
+            }
+
+            .print-page-content {
+              border: 3px double #d97706;
+              padding: 2cm;
+              box-sizing: border-box;
+              display: flex;
+              flex-direction: column;
+              min-height: 600px;
             }
             
             .header {
@@ -679,8 +699,14 @@ export default function Schedules() {
             }
             
             .logo {
-              font-size: 3rem;
-              margin: 0 0 10px 0;
+              margin: 0 0 15px 0;
+            }
+            
+            .logo img {
+              display: block;
+              margin: 0 auto;
+              height: 70px;
+              width: auto;
             }
             
             .title {
@@ -690,6 +716,7 @@ export default function Schedules() {
               color: #0f172a;
               margin: 0 0 5px 0;
               letter-spacing: 0.05em;
+              text-transform: uppercase;
             }
             
             .subtitle {
@@ -699,12 +726,6 @@ export default function Schedules() {
               letter-spacing: 0.15em;
               color: #d97706;
               margin: 0;
-            }
-            
-            .schedules-list {
-              display: flex;
-              flex-direction: column;
-              gap: 30px;
             }
             
             .schedule-item {
@@ -807,22 +828,49 @@ export default function Schedules() {
               letter-spacing: 0.1em;
               border-top: 1px solid #e2e8f0;
               padding-top: 20px;
+              margin-top: auto;
             }
             
             @media print {
               @page {
                 margin: 0;
+                size: A4 portrait;
               }
               body {
-                padding: 2cm;
                 background-color: #fff;
+                padding: 0;
+                margin: 0;
               }
-              .container {
-                border: 3px double #d97706 !important;
+              .schedules-list {
+                display: block !important;
+                padding: 0;
+                gap: 0;
+                margin: 0;
+              }
+              .print-page {
+                border: none !important;
                 box-shadow: none;
                 border-radius: 0;
-                padding: 30px;
+                padding: 1.5cm;
                 margin: 0;
+                width: 100%;
+                height: 100vh;
+                page-break-after: always;
+                page-break-inside: avoid;
+                break-after: page;
+                break-inside: avoid;
+                box-sizing: border-box;
+                display: block;
+                background-color: #ffffff;
+              }
+              .print-page-content {
+                border: 3px double #d97706 !important;
+                height: 100%;
+                padding: 2cm;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                box-sizing: border-box;
               }
               .schedule-item {
                 background-color: #fff !important;
@@ -832,79 +880,81 @@ export default function Schedules() {
           </style>
         </head>
         <body>
-          <div class="container">
-            <div class="header">
-              <div class="logo">
-                <img src="/saint_anthony_icon.png" alt="Santo Antônio" style="height: 70px; width: auto;" />
-              </div>
-              <h1 class="title">Paróquia de Santo Antônio</h1>
-              <p class="subtitle">Escala dos Servidores do Altar</p>
-            </div>
-            
-            <div class="schedules-list">
-              ${selectedSchedules.map(sc => {
-                const chapelName = getChapelName(sc.chapelId);
-                const dateVal = formattedPrintDate(sc.date);
-                const dayName = getDayName(sc.date);
-                
-                const ceremonialists = [];
-                if (sc.mainCeremonialistId) {
-                  ceremonialists.push(getServerName(sc.mainCeremonialistId) + ' (Principal)');
-                }
-                if (sc.ceremonialistIds && sc.ceremonialistIds.length > 0) {
-                  sc.ceremonialistIds.forEach(id => {
-                    ceremonialists.push(getServerName(id));
-                  });
-                }
-                
-                const altarServers = sc.serverIds.map(id => getServerName(id));
-                
-                return `
-                  <div class="schedule-item">
-                    <h3 class="chapel-name">${chapelName}</h3>
-                    <div class="meta-info">
-                      <span>📅 ${dateVal} (${dayName})</span>
-                      <span>⏰ ${formatTime(sc.time)}</span>
-                    </div>
-                    
-                    ${sc.observation ? `
-                      <div class="observation-box">
-                        <strong>⚠️ AVISO PARA ESTA CELEBRAÇÃO:</strong>
-                        <p>${sc.observation}</p>
+          <div class="schedules-list">
+            ${selectedSchedules.map(sc => {
+              const chapelName = getChapelName(sc.chapelId);
+              const dateVal = formattedPrintDate(sc.date);
+              const dayName = getDayName(sc.date);
+              
+              const ceremonialists = [];
+              if (sc.mainCeremonialistId) {
+                ceremonialists.push(getServerName(sc.mainCeremonialistId) + ' (Principal)');
+              }
+              if (sc.ceremonialistIds && sc.ceremonialistIds.length > 0) {
+                sc.ceremonialistIds.forEach(id => {
+                  ceremonialists.push(getServerName(id));
+                });
+              }
+              
+              const altarServers = sc.serverIds.map(id => getServerName(id));
+              
+              return `
+                <div class="print-page">
+                  <div class="print-page-content">
+                    <div class="header">
+                      <div class="logo">
+                        <img src="/saint_anthony_icon.png" alt="Santo Antônio" />
                       </div>
-                    ` : ''}
+                      <h1 class="title">Paróquia de Santo Antônio</h1>
+                      <p class="subtitle">Escala dos Servidores do Altar</p>
+                    </div>
 
-                    <div class="team-section">
-                      ${ceremonialists.length > 0 ? `
-                        <div class="team-row">
-                          <div class="role-label">Cerimoniários:</div>
-                          <div class="role-values">
-                            ${ceremonialists.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                    <div class="schedule-item">
+                      <h3 class="chapel-name">${chapelName}</h3>
+                      <div class="meta-info">
+                        <span>📅 ${dateVal} (${dayName})</span>
+                        <span>⏰ ${formatTime(sc.time)}</span>
+                      </div>
+                      
+                      ${sc.observation ? `
+                        <div class="observation-box">
+                          <strong>⚠️ AVISO PARA ESTA CELEBRAÇÃO:</strong>
+                          <p>${sc.observation}</p>
+                        </div>
+                      ` : ''}
+
+                      <div class="team-section">
+                        ${ceremonialists.length > 0 ? `
+                          <div class="team-row">
+                            <div class="role-label">Cerimoniários:</div>
+                            <div class="role-values">
+                              ${ceremonialists.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                            </div>
                           </div>
-                        </div>
-                      ` : ''}
-                      ${altarServers.length > 0 ? `
-                        <div class="team-row">
-                          <div class="role-label">Coroinhas:</div>
-                          <div class="role-values">
-                            ${altarServers.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                        ` : ''}
+                        ${altarServers.length > 0 ? `
+                          <div class="team-row">
+                            <div class="role-label">Coroinhas:</div>
+                            <div class="role-values">
+                              ${altarServers.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                            </div>
                           </div>
-                        </div>
-                      ` : ''}
-                      ${ceremonialists.length === 0 && altarServers.length === 0 ? `
-                        <div class="team-row">
-                          <div class="role-values" style="font-style: italic; color: #94a3b8; font-size: 1.1rem;">Nenhum servidor escalado.</div>
-                        </div>
-                      ` : ''}
+                        ` : ''}
+                        ${ceremonialists.length === 0 && altarServers.length === 0 ? `
+                          <div class="team-row">
+                            <div class="role-values" style="font-style: italic; color: #94a3b8; font-size: 1.1rem;">Nenhum servidor escalado.</div>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+
+                    <div class="footer">
+                      Zelo pela Liturgia • Serviço do Altar
                     </div>
                   </div>
-                `;
-              }).join('')}
-            </div>
-            
-            <div class="footer">
-              Zelo pela Liturgia • Serviço do Altar
-            </div>
+                </div>
+              `;
+            }).join('')}
           </div>
           <script>
             window.onload = function() {
