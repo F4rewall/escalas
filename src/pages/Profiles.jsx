@@ -97,6 +97,24 @@ export default function Profiles() {
     setIsFormModalOpen(true);
   };
 
+  const handlePhoneChange = (e) => {
+    const rawVal = e.target.value;
+    const digits = rawVal.replace(/\D/g, '').slice(0, 11);
+    let formatted = '';
+    if (digits.length === 0) {
+      formatted = '';
+    } else if (digits.length <= 2) {
+      formatted = `(${digits}`;
+    } else if (digits.length <= 6) {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    } else if (digits.length <= 10) {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    } else {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    }
+    setFormPhone(formatted);
+  };
+
   // Open Detail Modal
   const openDetailModal = (server) => {
     setSelectedServerForDetails(server);
@@ -107,6 +125,22 @@ export default function Profiles() {
     e.preventDefault();
     if (!formName.trim()) {
       alert('Preencha o nome do servidor.');
+      return;
+    }
+
+    const nameExists = servers.some(s => 
+      s.name.trim().toLowerCase() === formName.trim().toLowerCase() && 
+      (!editingServer || s.id !== editingServer.id)
+    );
+
+    if (nameExists) {
+      alert(`Já existe um servidor (coroinha ou cerimoniário) cadastrado com o nome "${formName.trim()}". Por favor, adicione um sobrenome ou diferenciador.`);
+      return;
+    }
+
+    const cleanPhone = formPhone.replace(/\D/g, '');
+    if (cleanPhone.length > 0 && cleanPhone.length < 10) {
+      alert('O número de telefone/WhatsApp deve ter 10 ou 11 dígitos.');
       return;
     }
 
@@ -261,7 +295,7 @@ export default function Profiles() {
                   <div>
                     <h3 style={styles.serverName}>{server.name}</h3>
                     <div style={styles.attendanceText}>
-                      Frequência: <strong style={{ color: stats.rate >= 80 ? 'var(--color-present)' : (stats.rate >= 50 ? 'var(--gold-light)' : 'var(--color-absent)') }}>
+                      Frequência: <strong style={{ color: stats.total === 0 ? 'var(--color-text-secondary)' : (stats.rate >= 80 ? 'var(--color-present)' : (stats.rate >= 50 ? 'var(--gold-light)' : 'var(--color-absent)')) }}>
                         {stats.rate}%
                       </strong>
                     </div>
@@ -359,7 +393,7 @@ export default function Profiles() {
                 placeholder="Ex: (11) 99999-9999" 
                 className="form-control"
                 value={formPhone}
-                onChange={(e) => setFormPhone(e.target.value)}
+                onChange={handlePhoneChange}
               />
             </div>
             <div className="form-group">
@@ -429,9 +463,9 @@ export default function Profiles() {
 
           return (
             <div>
-              <div style={styles.detailHeader}>
+              <div className="detail-header">
                 <div style={styles.detailStatsBlock}>
-                  <div style={styles.bigAttendanceCircle(stats.rate)}>
+                  <div style={styles.bigAttendanceCircle(stats.rate, stats.total)}>
                     <span>{stats.rate}%</span>
                     <span style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Presença</span>
                   </div>
@@ -706,8 +740,10 @@ const styles = {
     alignItems: 'center',
     gap: '1rem',
   },
-  bigAttendanceCircle: (rate) => {
-    const color = rate >= 90 ? 'var(--color-present)' : (rate >= 75 ? 'var(--gold-light)' : 'var(--color-absent)');
+  bigAttendanceCircle: (rate, total) => {
+    const color = total === 0 
+      ? 'var(--color-text-muted)' 
+      : (rate >= 90 ? 'var(--color-present)' : (rate >= 75 ? 'var(--gold-light)' : 'var(--color-absent)'));
     return {
       width: '90px',
       height: '90px',

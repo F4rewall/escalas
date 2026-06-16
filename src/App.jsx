@@ -10,7 +10,7 @@ import AdminLogin from './pages/AdminLogin';
 import './App.css';
 
 function AppContent() {
-  const { userRole } = useContext(AppContext);
+  const { userRole, loading } = useContext(AppContext);
   const isAdmin = userRole === 'admin';
 
   const [activeTab, setActiveTab] = useState(() => {
@@ -25,6 +25,24 @@ function AppContent() {
       setActiveTab('schedules');
     }
   }, [userRole]);
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--primary-gold)'
+      }}>
+        <div className="animate-pulse-slow" style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em' }}>
+          ⛪ Carregando dados da Paróquia...
+        </div>
+      </div>
+    );
+  }
 
   const renderActivePage = () => {
     // Route guard: if the user is not admin and is trying to access restricted tabs, fallback to schedules

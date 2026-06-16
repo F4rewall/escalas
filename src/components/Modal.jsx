@@ -17,9 +17,9 @@ export default function Modal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
+    <div className="modal-overlay" style={styles.overlay} onClick={onClose}>
       <div 
-        className="glass-panel" 
+        className="glass-panel modal-container" 
         style={styles.modalContent} 
         onClick={(e) => e.stopPropagation()}
       >
@@ -29,7 +29,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
             <X size={20} />
           </button>
         </div>
-        <div style={styles.body}>
+        <div className="modal-body" style={styles.body}>
           {children}
         </div>
       </div>

@@ -10,6 +10,7 @@ import {
   AlertCircle,
   CalendarDays,
   FileCheck,
+  Share2,
   Trash2,
   AlertTriangle,
   KeyRound
@@ -84,6 +85,21 @@ const getDayNameInPortuguese = (dateStr) => {
     'Sábado'
   ];
   return dayNames[dayIndex] || '';
+};
+
+const getDayOnly = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  return parts[2] || '';
+};
+
+const getMonthAbbr = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length < 2) return '';
+  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const monthIndex = parseInt(parts[1], 10) - 1;
+  return months[monthIndex] || '';
 };
 
 // Helper to check if a date is in the future
@@ -214,6 +230,7 @@ export default function Schedules() {
     chapels, 
     servers, 
     addSchedule, 
+    updateSchedule,
     deleteSchedule, 
     submitAttendanceAndReport,
     attendance,
@@ -261,6 +278,10 @@ export default function Schedules() {
       }
     }
   }, [isCreateModalOpen, selectedChapelId, chapels]);
+
+  // Share Modal States
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [selectedShareIds, setSelectedShareIds] = useState([]);
 
   // Code Verification Modal States
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
@@ -313,11 +334,11 @@ export default function Schedules() {
 
   // 1. Group/Filter schedules with safe sorting
   const upcomingSchedules = schedules
-    .filter(s => s.status === 'scheduled')
+    .filter(s => s.status === 'scheduled' && (userRole === 'admin' || s.published !== false))
     .sort((a, b) => new Date(a.date || '') - new Date(b.date || ''));
 
   const pastSchedules = schedules
-    .filter(s => s.status === 'completed')
+    .filter(s => s.status === 'completed' && (userRole === 'admin' || s.published !== false))
     .sort((a, b) => new Date(b.date || '') - new Date(a.date || ''));
 
   const activeSchedules = activeSubTab === 'upcoming' ? upcomingSchedules : pastSchedules;
@@ -527,6 +548,277 @@ export default function Schedules() {
     }
   };
 
+  // Toggle share checkbox
+  const handleToggleShareSelect = (id) => {
+    setSelectedShareIds(prev => 
+      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    );
+  };
+
+  // Toggle select all share schedules
+  const handleToggleSelectAllShare = () => {
+    if (selectedShareIds.length === upcomingSchedules.length) {
+      setSelectedShareIds([]);
+    } else {
+      setSelectedShareIds(upcomingSchedules.map(sc => sc.id));
+    }
+  };
+
+  // Print PDF Generator
+  const handlePrintSchedules = () => {
+    if (selectedShareIds.length === 0) {
+      alert('Selecione pelo menos uma escala para compartilhar.');
+      return;
+    }
+
+    const selectedSchedules = schedules.filter(sc => selectedShareIds.includes(sc.id));
+    selectedSchedules.sort((a, b) => new Date(a.date || '') - new Date(b.date || ''));
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Por favor, permita pop-ups para gerar a visualização das escalas.');
+      return;
+    }
+
+    const formattedPrintDate = (d) => {
+      const parts = d.split('-');
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    };
+
+    const getDayName = (d) => {
+      const dayIndex = new Date(d + 'T00:00:00').getDay();
+      return ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dayIndex];
+    };
+
+    const getChapelName = (id) => {
+      const c = chapels.find(ch => ch.id === id);
+      return c ? c.name : 'Capela Desconhecida';
+    };
+
+    const getServerName = (id) => {
+      const s = servers.find(sv => sv.id === id);
+      return s ? s.name : 'Desconhecido';
+    };
+
+    let content = `
+      <html>
+        <head>
+          <title>Escala de Altar - Paróquia de Santo Antônio</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+            
+            body {
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              color: #0f172a;
+              background-color: #ffffff;
+              margin: 0;
+              padding: 40px 20px;
+            }
+            
+            .container {
+              max-width: 800px;
+              margin: 0 auto;
+              border: 3px double #d97706;
+              padding: 40px;
+              border-radius: 16px;
+              box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 40px;
+              border-bottom: 2px solid rgba(217, 119, 6, 0.15);
+              padding-bottom: 25px;
+            }
+            
+            .logo {
+              font-size: 3rem;
+              margin: 0 0 10px 0;
+            }
+            
+            .title {
+              font-family: 'Cinzel', serif;
+              font-size: 1.8rem;
+              font-weight: 700;
+              color: #0f172a;
+              margin: 0 0 5px 0;
+              letter-spacing: 0.05em;
+            }
+            
+            .subtitle {
+              font-size: 0.85rem;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.15em;
+              color: #d97706;
+              margin: 0;
+            }
+            
+            .schedules-list {
+              display: flex;
+              flex-direction: column;
+              gap: 30px;
+            }
+            
+            .schedule-item {
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              padding: 20px;
+              background-color: #f8fafc;
+              page-break-inside: avoid;
+            }
+            
+            .chapel-name {
+              font-family: 'Cinzel', serif;
+              font-size: 1.25rem;
+              color: #b45309;
+              margin: 0 0 10px 0;
+              border-bottom: 1px solid rgba(217, 119, 6, 0.1);
+              padding-bottom: 5px;
+            }
+            
+            .meta-info {
+              display: flex;
+              gap: 25px;
+              font-size: 0.9rem;
+              font-weight: 700;
+              color: #475569;
+              margin-bottom: 15px;
+            }
+            
+            .meta-info span {
+              display: flex;
+              align-items: center;
+              gap: 5px;
+            }
+            
+            .team-section {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            }
+            
+            .team-row {
+              display: flex;
+              font-size: 0.85rem;
+              line-height: 1.4;
+            }
+            
+            .role-label {
+              font-weight: 700;
+              color: #64748b;
+              width: 180px;
+              flex-shrink: 0;
+            }
+            
+            .role-values {
+              color: #0f172a;
+              font-weight: 600;
+            }
+            
+            .footer {
+              text-align: center;
+              margin-top: 50px;
+              font-size: 0.75rem;
+              color: #94a3b8;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
+              border-top: 1px solid #e2e8f0;
+              padding-top: 20px;
+            }
+            
+            @media print {
+              body {
+                padding: 0;
+                background-color: #fff;
+              }
+              .container {
+                border: 3px double #d97706 !important;
+                box-shadow: none;
+                border-radius: 0;
+                padding: 30px;
+              }
+              .schedule-item {
+                background-color: #fff !important;
+                border: 1px solid #cbd5e1 !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="logo">⛪</div>
+              <h1 class="title">Paróquia de Santo Antônio</h1>
+              <p class="subtitle">Escala dos Servidores do Altar</p>
+            </div>
+            
+            <div class="schedules-list">
+              ${selectedSchedules.map(sc => {
+                const chapelName = getChapelName(sc.chapelId);
+                const dateVal = formattedPrintDate(sc.date);
+                const dayName = getDayName(sc.date);
+                
+                const ceremonialists = [];
+                if (sc.mainCeremonialistId) {
+                  ceremonialists.push(getServerName(sc.mainCeremonialistId) + ' (Principal)');
+                }
+                if (sc.ceremonialistIds && sc.ceremonialistIds.length > 0) {
+                  sc.ceremonialistIds.forEach(id => {
+                    ceremonialists.push(getServerName(id));
+                  });
+                }
+                
+                const altarServers = sc.serverIds.map(id => getServerName(id));
+                
+                return `
+                  <div class="schedule-item">
+                    <h3 class="chapel-name">${chapelName}</h3>
+                    <div class="meta-info">
+                      <span>📅 ${dateVal} (${dayName})</span>
+                      <span>⏰ ${sc.time}h</span>
+                    </div>
+                    <div class="team-section">
+                      ${ceremonialists.length > 0 ? `
+                        <div class="team-row">
+                          <div class="role-label">Cerimoniários:</div>
+                          <div class="role-values">${ceremonialists.join(', ')}</div>
+                        </div>
+                      ` : ''}
+                      ${altarServers.length > 0 ? `
+                        <div class="team-row">
+                          <div class="role-label">Coroinhas:</div>
+                          <div class="role-values">${altarServers.join(', ')}</div>
+                        </div>
+                      ` : ''}
+                      ${ceremonialists.length === 0 && altarServers.length === 0 ? `
+                        <div class="team-row">
+                          <div class="role-values" style="font-style: italic; color: #94a3b8;">Nenhum servidor escalado.</div>
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            
+            <div class="footer">
+              Zelo pela Liturgia • Serviço do Altar
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+  };
+
   return (
     <div>
       <div className="section-header">
@@ -538,9 +830,14 @@ export default function Schedules() {
         </div>
         
         {userRole === 'admin' ? (
-          <button className="btn btn-primary" onClick={openCreateModal}>
-            <Plus size={16} /> Montar Escala
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={() => setIsShareModalOpen(true)}>
+              <Share2 size={16} /> Compartilhar Escalas
+            </button>
+            <button className="btn btn-primary" onClick={openCreateModal}>
+              <Plus size={16} /> Montar Escala
+            </button>
+          </div>
         ) : (
           <button className="btn btn-secondary" onClick={() => setIsCodeModalOpen(true)}>
             <FileCheck size={16} /> Enviar Relatório (Código)
@@ -592,9 +889,14 @@ export default function Schedules() {
                 onClick={() => setSelectedDetailSchedule(sc)}
               >
                 <div style={styles.cardHeader}>
-                  <span className={`badge ${sc.status === 'completed' ? 'badge-present' : 'badge-scheduled'}`}>
-                    {sc.status === 'completed' ? 'Concluída' : 'Agendada'}
-                  </span>
+                  <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                    <span className={`badge ${sc.status === 'completed' ? 'badge-present' : 'badge-scheduled'}`}>
+                      {sc.status === 'completed' ? 'Concluída' : 'Agendada'}
+                    </span>
+                    {userRole === 'admin' && sc.published === false && (
+                      <span className="badge badge-justified">Rascunho</span>
+                    )}
+                  </div>
                   
                   {userRole === 'admin' && (
                     <button 
@@ -612,19 +914,29 @@ export default function Schedules() {
                   )}
                 </div>
 
-                <h3 style={styles.cardTitle}>{chapel.name}</h3>
+                <div className="schedule-card-main-highlight">
+                  {/* Highlighted Date Badge */}
+                  <div className="schedule-date-badge-wrapper">
+                    <span className="schedule-date-day">{getDayOnly(sc.date)}</span>
+                    <span className="schedule-date-month">{getMonthAbbr(sc.date)}</span>
+                    <span className="schedule-date-weekday">
+                      {getDayNameInPortuguese(sc.date).substring(0, 3)}
+                    </span>
+                  </div>
+
+                  {/* Main Details */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 className="schedule-card-chapel-title">{chapel.name}</h3>
+                    <div className="schedule-card-time-highlight">
+                      <Clock size={14} />
+                      <span>{sc.time}h • {getDayNameInPortuguese(sc.date)}</span>
+                    </div>
+                  </div>
+                </div>
                 
                 <div style={styles.cardInfo}>
                   <div style={styles.infoRow}>
-                    <CalendarDays size={14} style={{ color: 'var(--primary-gold)' }} />
-                    <span>{formatDate(sc.date)}</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <Clock size={14} style={{ color: 'var(--primary-gold)' }} />
-                    <span>{sc.time}h</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <MapPin size={14} style={{ color: 'var(--color-text-muted)' }} />
+                    <MapPin size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                     <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{chapel.address}</span>
                   </div>
                   {userRole === 'admin' && sc.status === 'scheduled' && (
@@ -712,23 +1024,53 @@ export default function Schedules() {
                   </div>
                 )}
 
-                {/* Admin Quick Action: Run Attendance Check */}
+                {/* Admin Quick Actions */}
                 {userRole === 'admin' && sc.status === 'scheduled' && (
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{
-                      ...styles.cardActionBtn,
-                      ...(isDateInFuture(sc.date) ? styles.cardActionBtnDisabled : {})
-                    }}
-                    disabled={isDateInFuture(sc.date)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openAttendanceModal(sc);
-                    }}
-                    title={isDateInFuture(sc.date) ? "O relatório só pode ser preenchido no dia da celebração" : "Fazer Chamada / Relatório"}
-                  >
-                    <FileCheck size={14} /> Fazer Chamada / Relatório
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem', width: '100%', marginTop: '1rem', flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
+                    {sc.published === false && (
+                      <button 
+                        className="btn btn-primary animate-pulse-slow" 
+                        style={{
+                          flex: '1 1 140px',
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.8rem',
+                          fontWeight: '700',
+                          backgroundColor: 'var(--primary-gold)',
+                          color: '#000',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.35rem'
+                        }}
+                        onClick={() => {
+                          if (confirm('Deseja publicar esta escala para que fique visível ao público?')) {
+                            updateSchedule({ ...sc, published: true });
+                          }
+                        }}
+                      >
+                        <CheckCircle size={14} /> Confirmar e Publicar
+                      </button>
+                    )}
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{
+                        flex: '1 1 140px',
+                        padding: '0.5rem 0.75rem',
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.35rem',
+                        border: '1px solid var(--border-color)',
+                        ...(isDateInFuture(sc.date) ? { opacity: 0.5, cursor: 'not-allowed' } : {})
+                      }}
+                      disabled={isDateInFuture(sc.date)}
+                      onClick={() => openAttendanceModal(sc)}
+                      title={isDateInFuture(sc.date) ? "O relatório só pode ser preenchido no dia da celebração" : "Fazer Chamada / Relatório"}
+                    >
+                      <FileCheck size={14} /> Chamada / Relatório
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -923,15 +1265,15 @@ export default function Schedules() {
           <div style={styles.attendanceListContainer}>
             <h4 style={{...styles.selectorSectionTitle, marginBottom: '0.75rem'}}>Lista de Presença</h4>
             {attendanceForm.map((item, index) => (
-              <div key={item.serverId} style={styles.attendanceFormRow}>
-                <div style={styles.attendanceFormNameCol}>
+              <div key={item.serverId} className="attendance-form-row">
+                <div className="attendance-form-name-col">
                   <span style={styles.serverCategoryBadge(item.category)}>
                     {item.category === 'cerimoniario' ? 'C' : 'Co'}
                   </span>
                   <span style={{ fontWeight: '500' }}>{item.name}</span>
                 </div>
 
-                <div style={styles.attendanceButtons}>
+                <div className="attendance-buttons">
                   <button
                     type="button"
                     style={{
@@ -1129,12 +1471,17 @@ export default function Schedules() {
             <div>
               <div style={styles.modalDetailHeader}>
                 <h3 style={styles.modalDetailChapel}>{chapel.name}</h3>
-                <span className={`badge ${selectedDetailSchedule.status === 'completed' ? 'badge-present' : 'badge-scheduled'}`}>
-                  {selectedDetailSchedule.status === 'completed' ? 'Concluída' : 'Agendada'}
-                </span>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  {selectedDetailSchedule.published === false && (
+                    <span className="badge badge-justified">Rascunho</span>
+                  )}
+                  <span className={`badge ${selectedDetailSchedule.status === 'completed' ? 'badge-present' : 'badge-scheduled'}`}>
+                    {selectedDetailSchedule.status === 'completed' ? 'Concluída' : 'Agendada'}
+                  </span>
+                </div>
               </div>
               
-              <div style={styles.modalDetailMetaGrid}>
+              <div className="modal-detail-meta-grid">
                 <div style={styles.modalDetailMetaItem}>
                   <CalendarDays size={16} style={{ color: 'var(--primary-gold)' }} />
                   <div>
@@ -1329,6 +1676,24 @@ export default function Schedules() {
                 </div>
               )}
 
+              {userRole === 'admin' && selectedDetailSchedule.published === false && selectedDetailSchedule.status === 'scheduled' && (
+                <div style={{ marginTop: '1.5rem', marginBottom: '0.75rem' }}>
+                  <button 
+                    type="button"
+                    className="btn btn-primary animate-pulse-slow"
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                    onClick={() => {
+                      if (confirm('Deseja publicar esta escala para que fique visível ao público?')) {
+                        updateSchedule({ ...selectedDetailSchedule, published: true });
+                        setSelectedDetailSchedule(prev => ({ ...prev, published: true }));
+                      }
+                    }}
+                  >
+                    <CheckCircle size={16} /> Confirmar e Publicar Escala
+                  </button>
+                </div>
+              )}
+
               <div style={styles.modalDetailActions}>
                 <button type="button" className="btn btn-secondary" onClick={() => setSelectedDetailSchedule(null)} style={{width: '100%'}}>
                   Fechar Detalhes
@@ -1337,6 +1702,110 @@ export default function Schedules() {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* MODAL: SHARE SCHEDULES */}
+      <Modal
+        isOpen={isShareModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setSelectedShareIds([]);
+        }}
+        title="Compartilhar Escalas (PDF / Imprimir)"
+      >
+        <div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+            Selecione as escalas que deseja incluir no documento de compartilhamento. O sistema gerará um arquivo formatado pronto para imprimir ou salvar como PDF.
+          </p>
+
+          {upcomingSchedules.length === 0 ? (
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontStyle: 'italic', padding: '1rem 0' }}>
+              Não há escalas futuras agendadas para compartilhar.
+            </p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>
+                  {selectedShareIds.length} de {upcomingSchedules.length} selecionadas
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                  onClick={handleToggleSelectAllShare}
+                >
+                  {selectedShareIds.length === upcomingSchedules.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                </button>
+              </div>
+
+              <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem', paddingRight: '0.25rem' }}>
+                {upcomingSchedules.map(sc => {
+                  const chapel = getChapel(sc.chapelId);
+                  const isChecked = selectedShareIds.includes(sc.id);
+                  return (
+                    <label 
+                      key={sc.id} 
+                      className={`share-select-row ${isChecked ? 'active' : ''}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        padding: '0.75rem',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        backgroundColor: isChecked ? 'rgba(217, 119, 6, 0.05)' : 'rgba(0,0,0,0.15)',
+                        transition: 'all var(--transition-fast)'
+                      }}
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked}
+                        onChange={() => handleToggleShareSelect(sc.id)}
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          accentColor: 'var(--primary-gold)',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: 'var(--color-text-primary)' }}>
+                          {chapel.name}
+                        </span>
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.1rem' }}>
+                          📅 {formatDate(sc.date)} • ⏰ {sc.time}h {sc.published === false ? '• (Rascunho)' : ''}
+                        </span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <div style={styles.formActions}>
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => {
+                setIsShareModalOpen(false);
+                setSelectedShareIds([]);
+              }}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-primary"
+              disabled={selectedShareIds.length === 0}
+              onClick={handlePrintSchedules}
+              style={selectedShareIds.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+            >
+              <Share2 size={16} /> Gerar PDF / Imprimir
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* MODAL: ENTER REPORT CODE */}

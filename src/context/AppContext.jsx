@@ -1,159 +1,98 @@
 import React, { createContext, useState, useEffect } from 'react';
+import { db } from '../firebase';
+import { 
+  collection, 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  writeBatch 
+} from 'firebase/firestore';
 
 export const AppContext = createContext();
 
-// Seed data (emptied for a clean system)
-const initialChapels = [];
-const initialServers = [];
-const initialSchedules = [];
-const initialAttendance = [];
-const initialReports = [];
-
 export const AppProvider = ({ children }) => {
-  // Wipe legacy seed data if present in localStorage to keep system completely clean
-  useState(() => {
-    const savedChapels = localStorage.getItem('eh_chapels');
-    const savedServers = localStorage.getItem('eh_servers');
-    let shouldClear = false;
-
-    if (savedChapels) {
-      try {
-        const chapelsList = JSON.parse(savedChapels);
-        const hasLegacy = chapelsList.some(c => c.id === 'c1' || c.id === 'c2' || c.id === 'c3' || c.id === 'c4');
-        if (hasLegacy) shouldClear = true;
-      } catch (e) {
-        shouldClear = true;
-      }
-    }
-
-    if (savedServers) {
-      try {
-        const serversList = JSON.parse(savedServers);
-        const hasLegacy = serversList.some(s => s.id === 's1' || s.id === 's2' || s.id === 's3' || s.id === 's4' || s.id === 's5' || s.id === 's6' || s.id === 's7' || s.id === 's8');
-        if (hasLegacy) shouldClear = true;
-      } catch (e) {
-        shouldClear = true;
-      }
-    }
-
-    if (shouldClear) {
-      localStorage.removeItem('eh_chapels');
-      localStorage.removeItem('eh_servers');
-      localStorage.removeItem('eh_schedules');
-      localStorage.removeItem('eh_attendance');
-      localStorage.removeItem('eh_reports');
-    }
-  });
-
   const [userRole, setUserRole] = useState(() => {
-    return localStorage.getItem('eh_user_role') || 'public'; // Defaults to public view for security
+    return localStorage.getItem('eh_user_role') || 'public';
   });
 
-  const [chapels, setChapels] = useState(() => {
-    try {
-      const saved = localStorage.getItem('eh_chapels');
-      return saved ? JSON.parse(saved) : initialChapels;
-    } catch (e) {
-      return initialChapels;
-    }
-  });
+  const [chapels, setChapels] = useState([]);
+  const [servers, setServers] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [servers, setServers] = useState(() => {
-    try {
-      const saved = localStorage.getItem('eh_servers');
-      return saved ? JSON.parse(saved) : initialServers;
-    } catch (e) {
-      return initialServers;
-    }
-  });
-
-  const [schedules, setSchedules] = useState(() => {
-    try {
-      const saved = localStorage.getItem('eh_schedules');
-      const rawSchedules = saved ? JSON.parse(saved) : initialSchedules;
-      
-      // Migration: convert older schedules without mainCeremonialistId and code
-      let migrated = false;
-      const updated = rawSchedules.map(sc => {
-        let changed = false;
-        let main = sc.mainCeremonialistId;
-        let remaining = sc.ceremonialistIds;
-        let code = sc.code;
-
-        if (sc.mainCeremonialistId === undefined) {
-          changed = true;
-          main = sc.ceremonialistIds && sc.ceremonialistIds.length > 0 ? sc.ceremonialistIds[0] : '';
-          remaining = sc.ceremonialistIds && sc.ceremonialistIds.length > 1 ? sc.ceremonialistIds.slice(1) : [];
-        }
-
-        if (!sc.code) {
-          changed = true;
-          code = String(Math.floor(1000 + Math.random() * 9000));
-        }
-
-        if (changed) {
-          migrated = true;
-          return {
-            ...sc,
-            mainCeremonialistId: main,
-            ceremonialistIds: remaining,
-            code: code
-          };
-        }
-        return sc;
-      });
-      
-      if (migrated && saved) {
-        localStorage.setItem('eh_schedules', JSON.stringify(updated));
-      }
-      return updated;
-    } catch (e) {
-      return initialSchedules;
-    }
-  });
-
-  const [attendance, setAttendance] = useState(() => {
-    try {
-      const saved = localStorage.getItem('eh_attendance');
-      return saved ? JSON.parse(saved) : initialAttendance;
-    } catch (e) {
-      return initialAttendance;
-    }
-  });
-
-  const [reports, setReports] = useState(() => {
-    try {
-      const saved = localStorage.getItem('eh_reports');
-      return saved ? JSON.parse(saved) : initialReports;
-    } catch (e) {
-      return initialReports;
-    }
-  });
-
-  // Save to localStorage
+  // Sync userRole to localStorage
   useEffect(() => {
     localStorage.setItem('eh_user_role', userRole);
   }, [userRole]);
 
+  // Realtime synchronization from Firestore
   useEffect(() => {
-    localStorage.setItem('eh_chapels', JSON.stringify(chapels));
-  }, [chapels]);
+    let loadedCount = 0;
+    const checkLoading = () => {
+      loadedCount++;
+      if (loadedCount >= 5) {
+        setLoading(false);
+      }
+    };
 
-  useEffect(() => {
-    localStorage.setItem('eh_servers', JSON.stringify(servers));
-  }, [servers]);
+    const unsubChapels = onSnapshot(collection(db, "chapels"), (snapshot) => {
+      setChapels(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      checkLoading();
+    }, (err) => {
+      console.error("Error loading chapels:", err);
+      checkLoading();
+    });
 
-  useEffect(() => {
-    localStorage.setItem('eh_schedules', JSON.stringify(schedules));
-  }, [schedules]);
+    const unsubServers = onSnapshot(collection(db, "servers"), (snapshot) => {
+      setServers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      checkLoading();
+    }, (err) => {
+      console.error("Error loading servers:", err);
+      checkLoading();
+    });
 
-  useEffect(() => {
-    localStorage.setItem('eh_attendance', JSON.stringify(attendance));
-  }, [attendance]);
+    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snapshot) => {
+      setSchedules(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      checkLoading();
+    }, (err) => {
+      console.error("Error loading schedules:", err);
+      checkLoading();
+    });
 
-  useEffect(() => {
-    localStorage.setItem('eh_reports', JSON.stringify(reports));
-  }, [reports]);
+    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snapshot) => {
+      setAttendance(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      checkLoading();
+    }, (err) => {
+      console.error("Error loading attendance:", err);
+      checkLoading();
+    });
+
+    const unsubReports = onSnapshot(collection(db, "reports"), (snapshot) => {
+      setReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      checkLoading();
+    }, (err) => {
+      console.error("Error loading reports:", err);
+      checkLoading();
+    });
+
+    // Clean up local storage caches once migrated
+    localStorage.removeItem('eh_chapels');
+    localStorage.removeItem('eh_servers');
+    localStorage.removeItem('eh_schedules');
+    localStorage.removeItem('eh_attendance');
+    localStorage.removeItem('eh_reports');
+
+    return () => {
+      unsubChapels();
+      unsubServers();
+      unsubSchedules();
+      unsubAttendance();
+      unsubReports();
+    };
+  }, []);
 
   // Auth Operations
   const loginAsAdmin = (password) => {
@@ -169,113 +108,211 @@ export const AppProvider = ({ children }) => {
   };
 
   // --- Servers Actions ---
-  const addServer = (server) => {
+  const addServer = async (server) => {
+    const id = 's_' + Date.now();
     const newServer = {
       ...server,
-      id: 's_' + Date.now(),
+      id,
       joinedDate: new Date().toISOString().split('T')[0],
       color: server.color || ['#3b82f6', '#ec4899', '#eab308', '#10b981', '#8b5cf6', '#f97316', '#14b8a6', '#6366f1'][Math.floor(Math.random() * 8)]
     };
-    setServers((prev) => [...prev, newServer]);
+    try {
+      await setDoc(doc(db, "servers", id), newServer);
+    } catch (e) {
+      console.error("Error adding server:", e);
+    }
   };
 
-  const updateServer = (updatedServer) => {
-    setServers((prev) => prev.map((s) => (s.id === updatedServer.id ? updatedServer : s)));
+  const updateServer = async (updatedServer) => {
+    try {
+      await setDoc(doc(db, "servers", updatedServer.id), updatedServer);
+    } catch (e) {
+      console.error("Error updating server:", e);
+    }
   };
 
-  const deleteServer = (id) => {
-    setServers((prev) => prev.filter((s) => s.id !== id));
-    // Also cleanup in schedules
-    setSchedules((prev) =>
-      prev.map((sc) => ({
-        ...sc,
-        serverIds: sc.serverIds.filter((sid) => sid !== id),
-        ceremonialistIds: sc.ceremonialistIds.filter((sid) => sid !== id),
-        mainCeremonialistId: sc.mainCeremonialistId === id ? '' : sc.mainCeremonialistId
-      }))
-    );
+  const deleteServer = async (id) => {
+    try {
+      // 1. Delete server document
+      await deleteDoc(doc(db, "servers", id));
+      
+      // 2. Cleanup in schedules
+      const batch = writeBatch(db);
+      schedules.forEach((sc) => {
+        let changed = false;
+        let serverIds = sc.serverIds || [];
+        let ceremonialistIds = sc.ceremonialistIds || [];
+        let mainCeremonialistId = sc.mainCeremonialistId;
+
+        if (serverIds.includes(id)) {
+          serverIds = serverIds.filter(sid => sid !== id);
+          changed = true;
+        }
+        if (ceremonialistIds.includes(id)) {
+          ceremonialistIds = ceremonialistIds.filter(sid => sid !== id);
+          changed = true;
+        }
+        if (mainCeremonialistId === id) {
+          mainCeremonialistId = '';
+          changed = true;
+        }
+
+        if (changed) {
+          batch.update(doc(db, "schedules", sc.id), {
+            serverIds,
+            ceremonialistIds,
+            mainCeremonialistId
+          });
+        }
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Error deleting server:", e);
+    }
   };
 
   // --- Chapels Actions ---
-  const addChapel = (chapel) => {
+  const addChapel = async (chapel) => {
+    const id = 'c_' + Date.now();
     const newChapel = {
       ...chapel,
-      id: 'c_' + Date.now(),
+      id,
       massTimes: chapel.massTimes || []
     };
-    setChapels((prev) => [...prev, newChapel]);
+    try {
+      await setDoc(doc(db, "chapels", id), newChapel);
+    } catch (e) {
+      console.error("Error adding chapel:", e);
+    }
   };
 
-  const updateChapel = (updatedChapel) => {
-    setChapels((prev) => prev.map((c) => (c.id === updatedChapel.id ? updatedChapel : c)));
+  const updateChapel = async (updatedChapel) => {
+    try {
+      await setDoc(doc(db, "chapels", updatedChapel.id), updatedChapel);
+    } catch (e) {
+      console.error("Error updating chapel:", e);
+    }
   };
 
-  const deleteChapel = (id) => {
-    setChapels((prev) => prev.filter((c) => c.id !== id));
-    // Remove schedules for this chapel
-    setSchedules((prev) => prev.filter((sc) => sc.chapelId !== id));
+  const deleteChapel = async (id) => {
+    try {
+      // 1. Delete chapel
+      await deleteDoc(doc(db, "chapels", id));
+      
+      // 2. Remove schedules for this chapel
+      const batch = writeBatch(db);
+      schedules.forEach((sc) => {
+        if (sc.chapelId === id) {
+          batch.delete(doc(db, "schedules", sc.id));
+        }
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Error deleting chapel:", e);
+    }
   };
 
   // --- Schedules Actions ---
-  const addSchedule = (schedule) => {
+  const addSchedule = async (schedule) => {
+    const id = 'sc_' + Date.now();
     const newSchedule = {
       ...schedule,
-      id: 'sc_' + Date.now(),
+      id,
       status: 'scheduled',
+      published: false,
       reportSubmitted: false,
       code: String(Math.floor(1000 + Math.random() * 9000))
     };
-    setSchedules((prev) => [newSchedule, ...prev]);
+    try {
+      await setDoc(doc(db, "schedules", id), newSchedule);
+    } catch (e) {
+      console.error("Error adding schedule:", e);
+    }
   };
 
-  const updateSchedule = (updatedSchedule) => {
-    setSchedules((prev) => prev.map((sc) => (sc.id === updatedSchedule.id ? updatedSchedule : sc)));
+  const updateSchedule = async (updatedSchedule) => {
+    try {
+      await setDoc(doc(db, "schedules", updatedSchedule.id), updatedSchedule);
+    } catch (e) {
+      console.error("Error updating schedule:", e);
+    }
   };
 
-  const deleteSchedule = (id) => {
-    setSchedules((prev) => prev.filter((sc) => sc.id !== id));
-    setAttendance((prev) => prev.filter((att) => att.scheduleId !== id));
-    setReports((prev) => prev.filter((rep) => rep.scheduleId !== id));
+  const deleteSchedule = async (id) => {
+    try {
+      // 1. Delete schedule
+      await deleteDoc(doc(db, "schedules", id));
+      
+      // 2. Cleanup attendance and reports associated with this schedule
+      const batch = writeBatch(db);
+      attendance.forEach((att) => {
+        if (att.scheduleId === id) {
+          batch.delete(doc(db, "attendance", att.id));
+        }
+      });
+      reports.forEach((rep) => {
+        if (rep.scheduleId === id) {
+          batch.delete(doc(db, "reports", rep.id));
+        }
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Error deleting schedule:", e);
+    }
   };
 
   // --- Attendance and Report Submission ---
-  const submitAttendanceAndReport = (scheduleId, attendanceRecords, reportData) => {
-    // 1. Save attendance records
-    setAttendance((prev) => {
-      const filtered = prev.filter((att) => att.scheduleId !== scheduleId);
-      return [...filtered, ...attendanceRecords];
-    });
+  const submitAttendanceAndReport = async (scheduleId, attendanceRecords, reportData) => {
+    try {
+      const batch = writeBatch(db);
 
-    // 2. Add coordinator report
-    const scheduleObj = schedules.find((sc) => sc.id === scheduleId);
-    const date = scheduleObj ? scheduleObj.date : new Date().toISOString().split('T')[0];
-    
-    const presentCount = attendanceRecords.filter((r) => r.status === 'present').length;
-    const absentCount = attendanceRecords.filter((r) => r.status === 'absent').length;
-    const justifiedCount = attendanceRecords.filter((r) => r.status === 'justified').length;
-    const attendanceSummary = `${presentCount} presente(s), ${absentCount} falta(s), ${justifiedCount} justificada(s)`;
+      // 1. Save attendance records
+      // First delete any existing attendance for this schedule to avoid duplicates
+      attendance.forEach((att) => {
+        if (att.scheduleId === scheduleId) {
+          batch.delete(doc(db, "attendance", att.id));
+        }
+      });
 
-    const newReport = {
-      scheduleId,
-      date,
-      attendanceSummary,
-      coordinatorName: reportData.confirmacao || 'Coordenador',
-      ...reportData
-    };
+      attendanceRecords.forEach((record) => {
+        const attId = 'att_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        batch.set(doc(db, "attendance", attId), {
+          id: attId,
+          ...record
+        });
+      });
 
-    setReports((prev) => {
-      const filtered = prev.filter((rep) => rep.scheduleId !== scheduleId);
-      return [newReport, ...filtered];
-    });
+      // 2. Add coordinator report
+      const scheduleObj = schedules.find((sc) => sc.id === scheduleId);
+      const date = scheduleObj ? scheduleObj.date : new Date().toISOString().split('T')[0];
+      
+      const presentCount = attendanceRecords.filter((r) => r.status === 'present').length;
+      const absentCount = attendanceRecords.filter((r) => r.status === 'absent').length;
+      const justifiedCount = attendanceRecords.filter((r) => r.status === 'justified').length;
+      const attendanceSummary = `${presentCount} presente(s), ${absentCount} falta(s), ${justifiedCount} justificada(s)`;
 
-    // 3. Mark schedule as completed
-    setSchedules((prev) =>
-      prev.map((sc) =>
-        sc.id === scheduleId
-          ? { ...sc, status: 'completed', coordinatorName: reportData.confirmacao || 'Coordenador', reportSubmitted: true }
-          : sc
-      )
-    );
+      const repId = 'rep_' + scheduleId;
+      const newReport = {
+        id: repId,
+        scheduleId,
+        date,
+        attendanceSummary,
+        coordinatorName: reportData.confirmacao || 'Coordenador',
+        ...reportData
+      };
+      batch.set(doc(db, "reports", repId), newReport);
+
+      // 3. Mark schedule as completed
+      batch.update(doc(db, "schedules", scheduleId), {
+        status: 'completed',
+        coordinatorName: reportData.confirmacao || 'Coordenador',
+        reportSubmitted: true
+      });
+
+      await batch.commit();
+    } catch (e) {
+      console.error("Error submitting attendance and report:", e);
+    }
   };
 
   // Helper stats for servers
@@ -285,22 +322,23 @@ export const AppProvider = ({ children }) => {
     const absent = serverAttendance.filter((a) => a.status === 'absent').length;
     const justified = serverAttendance.filter((a) => a.status === 'justified').length;
     const total = present + absent + justified;
-    const rate = total > 0 ? Math.round((present / total) * 100) : 100;
+    const rate = total > 0 ? Math.round((present / total) * 100) : 0;
 
     return { present, absent, justified, total, rate };
   };
 
-  const clearAllData = () => {
-    setChapels([]);
-    setServers([]);
-    setSchedules([]);
-    setAttendance([]);
-    setReports([]);
-    localStorage.removeItem('eh_chapels');
-    localStorage.removeItem('eh_servers');
-    localStorage.removeItem('eh_schedules');
-    localStorage.removeItem('eh_attendance');
-    localStorage.removeItem('eh_reports');
+  const clearAllData = async () => {
+    try {
+      const batch = writeBatch(db);
+      chapels.forEach((c) => batch.delete(doc(db, "chapels", c.id)));
+      servers.forEach((s) => batch.delete(doc(db, "servers", s.id)));
+      schedules.forEach((sc) => batch.delete(doc(db, "schedules", sc.id)));
+      attendance.forEach((att) => batch.delete(doc(db, "attendance", att.id)));
+      reports.forEach((rep) => batch.delete(doc(db, "reports", rep.id)));
+      await batch.commit();
+    } catch (e) {
+      console.error("Error clearing all data:", e);
+    }
   };
 
   return (
@@ -325,7 +363,8 @@ export const AppProvider = ({ children }) => {
         deleteSchedule,
         submitAttendanceAndReport,
         getServerStats,
-        clearAllData
+        clearAllData,
+        loading
       }}
     >
       {children}

@@ -49,11 +49,11 @@ export default function Reports() {
 
   const coroinhaAvgRate = coroinhasStats.length > 0
     ? Math.round(coroinhasStats.reduce((acc, curr) => acc + curr.rate, 0) / coroinhasStats.length)
-    : 100;
+    : 0;
 
   const cerimoniarioAvgRate = cerimoniariosStats.length > 0
     ? Math.round(cerimoniariosStats.reduce((acc, curr) => acc + curr.rate, 0) / cerimoniariosStats.length)
-    : 100;
+    : 0;
 
   // Find Top Attenders (Present at least 1 time, sorted by rate desc)
   const topAttenders = [...serverStatsList]

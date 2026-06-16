@@ -238,7 +238,7 @@ export default function Chapels() {
           {/* Manage mass times list */}
           <div className="form-group">
             <label>Adicionar Horário de Missa</label>
-            <div style={styles.addTimeRow}>
+            <div className="add-time-row">
               <input 
                 type="text" 
                 placeholder="Ex: Domingo 18:00, Quinta 19:30" 

@@ -35,7 +35,7 @@ export default function Dashboard({ setActiveTab }) {
   const totalAttendanceRecords = pastAttendance.length;
   const overallAttendanceRate = totalAttendanceRecords > 0 
     ? Math.round((presentCount / totalAttendanceRecords) * 100) 
-    : 100;
+    : 0;
 
   // Get next 3 upcoming schedules
   const nextThree = upcomingSchedules.slice(0, 3);

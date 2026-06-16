@@ -49,10 +49,13 @@ export default function Navbar({ activeTab, setActiveTab }) {
           style={styles.brand} 
           onClick={() => setActiveTab(isAdmin ? 'dashboard' : 'schedules')}
         >
-          <Church style={styles.logoIcon} />
+          <img 
+            src="/saint_anthony_icon.png" 
+            alt="Santo Antônio" 
+            style={styles.logoImage} 
+          />
           <div>
             <span className="brand-font" style={styles.brandTitle}>SANTO ANTÔNIO</span>
-            <span style={styles.brandSubtitle}>Escala de Altar</span>
           </div>
         </div>
 
@@ -87,10 +90,49 @@ export default function Navbar({ activeTab, setActiveTab }) {
               </button>
             );
           })}
+
+          {/* Mobile-only auth details inside the menu drawer */}
+          <div className="mobile-only-auth">
+            {isAdmin ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
+                <div style={{ ...styles.adminBadge, justifyContent: 'center' }}>
+                  <ShieldCheck size={14} style={{ color: 'var(--primary-gold)' }} />
+                  <span style={styles.adminText}>Administrador</span>
+                </div>
+                <button 
+                  onClick={() => {
+                    handleLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                  style={{ ...styles.logoutBtn, justifyContent: 'center', padding: '0.6rem' }}
+                >
+                  <LogOut size={16} />
+                  <span>Sair</span>
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => {
+                  setActiveTab('admin-login');
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  ...styles.loginBtn,
+                  justifyContent: 'center',
+                  padding: '0.6rem',
+                  width: '100%',
+                  ...(activeTab === 'admin-login' ? styles.loginBtnActive : {})
+                }}
+              >
+                <Lock size={14} />
+                <span>Login Adm</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Authenticated Admin Badge or Login Button */}
-        <div style={styles.authWrapper}>
+        {/* Authenticated Admin Badge or Login Button (Desktop Only) */}
+        <div className="desktop-only-auth" style={styles.authWrapper}>
           {isAdmin ? (
             <div style={styles.adminGroup}>
               <div style={styles.adminBadge}>
@@ -150,11 +192,13 @@ const styles = {
     gap: '0.75rem',
     cursor: 'pointer',
   },
-  logoIcon: {
-    width: '2rem',
-    height: '2rem',
-    color: 'var(--primary-gold)',
-    filter: 'drop-shadow(0 0 4px var(--gold-glow))',
+  logoImage: {
+    width: '2.5rem',
+    height: '2.5rem',
+    borderRadius: '50%',
+    border: '1.5px solid var(--primary-gold)',
+    boxShadow: '0 0 8px var(--gold-glow)',
+    objectFit: 'cover',
   },
   brandTitle: {
     display: 'block',

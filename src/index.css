@@ -445,8 +445,8 @@ h1, h2, h3, h4, .brand-font {
 }
 
 @keyframes modalIn {
-  from { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: translateY(15px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes overlayIn {
@@ -873,4 +873,243 @@ h1, h2, h3, h4, .brand-font {
 .btn-primary:hover::after {
   left: 150%;
   transition: left 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- RESPONSIVE MOBILE OPTIMIZATIONS (ADMIN & UTILITIES) --- */
+
+.desktop-only-auth {
+  display: flex;
+}
+
+.mobile-only-auth {
+  display: none;
+}
+
+/* Presence Call Forms */
+.attendance-form-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1.5fr;
+  gap: 1rem;
+  align-items: center;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.attendance-form-name-col {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.attendance-buttons {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+/* Detail Scale Grid */
+.modal-detail-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  background-color: rgba(0, 0, 0, 0.15);
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+/* Profile Ficha Detail Header */
+.detail-header {
+  display: grid;
+  grid-template-columns: 1.2fr 1.8fr;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+/* Chapel Add Time Row */
+.add-time-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  /* Hide desktop header items and show in mobile drawer menu */
+  .desktop-only-auth {
+    display: none !important;
+  }
+  
+  .mobile-only-auth {
+    display: flex !important;
+    flex-direction: column;
+    width: 100%;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 1rem;
+    margin-top: 0.5rem;
+    gap: 0.75rem;
+  }
+
+  /* Stack presence list item name and buttons vertically */
+  .attendance-form-row {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .attendance-buttons {
+    justify-content: flex-start !important;
+    width: 100%;
+  }
+
+  /* Increase button hit size for mobile fingers */
+  .attendance-buttons button {
+    flex: 1;
+    padding: 0.65rem 0.5rem !important;
+    font-size: 0.85rem !important;
+  }
+
+  /* Make profile admin action buttons persistently visible on touchscreens */
+  .profiles-admin-tools {
+    opacity: 1 !important;
+    transform: none !important;
+    position: static !important;
+    margin-top: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  /* Scale down modal spacing and allow scrolling of the entire modal content */
+  .modal-overlay {
+    display: flex !important;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    padding: 1.5rem 0.5rem !important;
+  }
+
+  .modal-container {
+    max-height: none !important;
+    margin: 0 auto !important;
+  }
+
+  .modal-body {
+    padding: 1rem !important;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Stack stats block in server profile detail */
+  .detail-header {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+    text-align: center;
+    justify-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Stack metadata details (Date / Time) in scale detail modal */
+  .modal-detail-meta-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+    padding: 0.75rem !important;
+  }
+
+  /* Prevent Calendar Picker overflow on small smartphone screens */
+  .calendar-container {
+    padding: 0.5rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .calendar-days-grid {
+    gap: 4px !important;
+  }
+
+  .calendar-day-btn {
+    font-size: 0.75rem !important;
+  }
+
+  .calendar-month-title {
+    font-size: 0.85rem !important;
+  }
+
+  /* Stack add time button on chapels */
+  .add-time-row {
+    flex-direction: column !important;
+  }
+}
+
+/* Share Modal selector row styles */
+.share-select-row {
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.share-select-row:hover {
+  border-color: var(--border-color-active) !important;
+  transform: translateY(-1px);
+}
+
+.share-select-row.active {
+  border-color: var(--primary-gold) !important;
+  box-shadow: 0 0 10px rgba(217, 119, 6, 0.15);
+}
+
+/* Highlighted Date Layout on Schedules Card */
+.schedule-card-main-highlight {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  margin: 0.5rem 0 1rem 0;
+}
+
+.schedule-date-badge-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 65px;
+  height: 70px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-gold), var(--gold-light));
+  color: #000;
+  font-weight: bold;
+  box-shadow: 0 4px 12px var(--gold-glow);
+  flex-shrink: 0;
+}
+
+.schedule-date-day {
+  font-size: 1.6rem;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.schedule-date-month {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.schedule-date-weekday {
+  font-size: 0.6rem;
+  opacity: 0.8;
+  text-transform: uppercase;
+  font-weight: 800;
+  margin-top: 1px;
+}
+
+.schedule-card-chapel-title {
+  font-size: 1.2rem;
+  color: var(--color-text-primary);
+  margin: 0 0 0.25rem 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.schedule-card-time-highlight {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--primary-gold);
+  font-weight: 700;
+  font-size: 0.95rem;
 }
