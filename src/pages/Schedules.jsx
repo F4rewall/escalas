@@ -872,7 +872,7 @@ export default function Schedules() {
                 padding: 1.2cm 1.5cm;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
+                justify-content: flex-start;
                 box-sizing: border-box;
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
