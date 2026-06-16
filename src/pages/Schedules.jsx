@@ -271,6 +271,7 @@ export default function Schedules() {
   const [selectedCeremonialistId, setSelectedCeremonialistId] = useState('');
   const [selectedAuxCeremonialistIds, setSelectedAuxCeremonialistIds] = useState([]);
   const [editingSchedule, setEditingSchedule] = useState(null);
+  const [scheduleObservation, setScheduleObservation] = useState('');
 
   // Helper to auto-select the first available mass time
   const autoSelectTime = (chapelId, dateStr) => {
@@ -391,6 +392,7 @@ export default function Schedules() {
     setSelectedServerIds([]);
     setSelectedCeremonialistId('');
     setSelectedAuxCeremonialistIds([]);
+    setScheduleObservation('');
     setIsCreateModalOpen(true);
   };
 
@@ -402,6 +404,7 @@ export default function Schedules() {
     setSelectedServerIds(schedule.serverIds || []);
     setSelectedCeremonialistId(schedule.mainCeremonialistId || '');
     setSelectedAuxCeremonialistIds(schedule.ceremonialistIds || []);
+    setScheduleObservation(schedule.observation || '');
     setIsCreateModalOpen(true);
   };
 
@@ -436,7 +439,8 @@ export default function Schedules() {
       time: scheduleTime,
       serverIds: selectedServerIds,
       mainCeremonialistId: selectedCeremonialistId,
-      ceremonialistIds: selectedAuxCeremonialistIds
+      ceremonialistIds: selectedAuxCeremonialistIds,
+      observation: scheduleObservation
     };
 
     if (editingSchedule) {
@@ -743,20 +747,55 @@ export default function Schedules() {
             
             .team-row {
               display: flex;
-              font-size: 0.85rem;
+              flex-direction: column;
+              gap: 4px;
               line-height: 1.4;
+              margin-bottom: 15px;
             }
             
             .role-label {
-              font-weight: 700;
-              color: #64748b;
-              width: 180px;
-              flex-shrink: 0;
+              font-weight: 800;
+              color: #b45309;
+              font-size: 1.15rem;
+              border-bottom: 2px solid rgba(217, 119, 6, 0.15);
+              padding-bottom: 3px;
+              margin-bottom: 6px;
             }
             
             .role-values {
               color: #0f172a;
               font-weight: 600;
+              padding-left: 5px;
+            }
+
+            .name-item {
+              margin: 5px 0;
+              font-size: 1.25rem;
+              font-weight: 700;
+              color: #0f172a;
+            }
+
+            .observation-box {
+              background-color: #fffbeb;
+              border-left: 5px solid #d97706;
+              padding: 12px 15px;
+              margin-bottom: 20px;
+              border-radius: 0 4px 4px 0;
+              font-size: 1.1rem;
+              color: #78350f;
+            }
+
+            .observation-box strong {
+              display: block;
+              font-size: 0.95rem;
+              margin-bottom: 5px;
+              color: #b45309;
+            }
+
+            .observation-box p {
+              margin: 0;
+              font-weight: 600;
+              line-height: 1.4;
             }
             
             .footer {
@@ -821,22 +860,34 @@ export default function Schedules() {
                       <span>📅 ${dateVal} (${dayName})</span>
                       <span>⏰ ${formatTime(sc.time)}</span>
                     </div>
+                    
+                    ${sc.observation ? `
+                      <div class="observation-box">
+                        <strong>⚠️ AVISO PARA ESTA CELEBRAÇÃO:</strong>
+                        <p>${sc.observation}</p>
+                      </div>
+                    ` : ''}
+
                     <div class="team-section">
                       ${ceremonialists.length > 0 ? `
                         <div class="team-row">
                           <div class="role-label">Cerimoniários:</div>
-                          <div class="role-values">${ceremonialists.join(', ')}</div>
+                          <div class="role-values">
+                            ${ceremonialists.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                          </div>
                         </div>
                       ` : ''}
                       ${altarServers.length > 0 ? `
                         <div class="team-row">
                           <div class="role-label">Coroinhas:</div>
-                          <div class="role-values">${altarServers.join(', ')}</div>
+                          <div class="role-values">
+                            ${altarServers.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                          </div>
                         </div>
                       ` : ''}
                       ${ceremonialists.length === 0 && altarServers.length === 0 ? `
                         <div class="team-row">
-                          <div class="role-values" style="font-style: italic; color: #94a3b8;">Nenhum servidor escalado.</div>
+                          <div class="role-values" style="font-style: italic; color: #94a3b8; font-size: 1.1rem;">Nenhum servidor escalado.</div>
                         </div>
                       ` : ''}
                     </div>
@@ -988,6 +1039,24 @@ export default function Schedules() {
                       <Clock size={14} />
                       <span>{formatTime(sc.time)} • {getDayNameInPortuguese(sc.date)}</span>
                     </div>
+                    {sc.observation && (
+                      <div style={{
+                        marginTop: '0.5rem',
+                        padding: '0.4rem 0.6rem',
+                        backgroundColor: 'rgba(217, 119, 6, 0.08)',
+                        borderLeft: '3px solid var(--primary-gold)',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem',
+                        color: 'var(--gold-light)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.35rem',
+                        lineHeight: '1.3'
+                      }}>
+                        <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+                        <span><strong>Aviso:</strong> {sc.observation}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -1292,6 +1361,18 @@ export default function Schedules() {
             </div>
           </div>
 
+          <div className="form-group" style={{ marginTop: '1.5rem' }}>
+            <label>Aviso / Observação para esta Celebração (Opcional)</label>
+            <textarea
+              className="form-control"
+              placeholder="Ex: Missa com Crisma, Trazer túnica festiva, etc."
+              value={scheduleObservation}
+              onChange={(e) => setScheduleObservation(e.target.value)}
+              rows={2}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
+
           <div style={styles.formActions}>
             <button 
               type="button" 
@@ -1554,6 +1635,24 @@ export default function Schedules() {
                   </div>
                 </div>
               </div>
+
+              {selectedDetailSchedule.observation && (
+                <div style={{
+                  ...styles.modalDetailSection,
+                  backgroundColor: 'rgba(217, 119, 6, 0.08)',
+                  borderLeft: '4px solid var(--primary-gold)',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '0 8px 8px 0',
+                  marginBottom: '1.5rem'
+                }}>
+                  <h4 style={{ ...styles.modalDetailSectionTitle, color: 'var(--primary-gold)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                    <AlertTriangle size={16} /> Aviso / Observação da Celebração
+                  </h4>
+                  <p style={{ ...styles.modalDetailText, marginTop: '0.5rem', color: 'var(--color-text-primary)', fontSize: '0.95rem', fontWeight: '500' }}>
+                    {selectedDetailSchedule.observation}
+                  </p>
+                </div>
+              )}
 
               <div style={styles.modalDetailSection}>
                 <h4 style={styles.modalDetailSectionTitle}>Local</h4>
