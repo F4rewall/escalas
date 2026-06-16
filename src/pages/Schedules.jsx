@@ -674,7 +674,7 @@ export default function Schedules() {
               background-color: #ffffff;
               width: 100%;
               max-width: 800px;
-              padding: 1.5cm;
+              padding: 0.8cm;
               box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
               box-sizing: border-box;
               border-radius: 16px;
@@ -684,7 +684,7 @@ export default function Schedules() {
 
             .print-page-content {
               border: 3px double #d97706;
-              padding: 2cm;
+              padding: 1.2cm 1.5cm;
               box-sizing: border-box;
               display: flex;
               flex-direction: column;
@@ -693,25 +693,25 @@ export default function Schedules() {
             
             .header {
               text-align: center;
-              margin-bottom: 40px;
+              margin-bottom: 25px;
               border-bottom: 2px solid rgba(217, 119, 6, 0.15);
-              padding-bottom: 25px;
+              padding-bottom: 15px;
             }
             
             .logo {
-              margin: 0 0 15px 0;
+              margin: 0 0 10px 0;
             }
             
             .logo img {
               display: block;
               margin: 0 auto;
-              height: 70px;
+              height: 60px;
               width: auto;
             }
             
             .title {
               font-family: 'Cinzel', serif;
-              font-size: 1.8rem;
+              font-size: 1.6rem;
               font-weight: 700;
               color: #0f172a;
               margin: 0 0 5px 0;
@@ -738,7 +738,7 @@ export default function Schedules() {
             
             .chapel-name {
               font-family: 'Cinzel', serif;
-              font-size: 1.25rem;
+              font-size: 1.2rem;
               color: #b45309;
               margin: 0 0 10px 0;
               border-bottom: 1px solid rgba(217, 119, 6, 0.1);
@@ -777,7 +777,7 @@ export default function Schedules() {
             .role-label {
               font-weight: 800;
               color: #b45309;
-              font-size: 1.15rem;
+              font-size: 1.1rem;
               border-bottom: 2px solid rgba(217, 119, 6, 0.15);
               padding-bottom: 3px;
               margin-bottom: 6px;
@@ -794,7 +794,7 @@ export default function Schedules() {
 
             .name-item {
               margin: 3px 0;
-              font-size: 1.25rem;
+              font-size: 1.15rem;
               font-weight: 700;
               color: #0f172a;
             }
@@ -854,10 +854,10 @@ export default function Schedules() {
                 border: none !important;
                 box-shadow: none;
                 border-radius: 0;
-                padding: 1.5cm;
+                padding: 0.8cm;
                 margin: 0;
                 width: 100%;
-                height: 100vh;
+                min-height: 100vh;
                 page-break-after: always;
                 page-break-inside: avoid;
                 break-after: page;
@@ -868,8 +868,8 @@ export default function Schedules() {
               }
               .print-page-content {
                 border: 3px double #d97706 !important;
-                height: 100%;
-                padding: 2cm;
+                min-height: calc(100vh - 1.6cm);
+                padding: 1.2cm 1.5cm;
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
