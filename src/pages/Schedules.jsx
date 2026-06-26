@@ -14,7 +14,8 @@ import {
   Trash2,
   AlertTriangle,
   KeyRound,
-  Edit3
+  Edit3,
+  ArrowLeftRight
 } from 'lucide-react';
 
 // Helper to get next N Saturdays (dayOfWeek = 6) or Sundays (dayOfWeek = 0)
@@ -273,6 +274,11 @@ export default function Schedules() {
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [scheduleObservation, setScheduleObservation] = useState('');
 
+  // Swap/Substitution States
+  const [swapTarget, setSwapTarget] = useState(null); // { scheduleId, serverId, serverName, category }
+  const [swapType, setSwapType] = useState('direct'); // 'direct' | 'request' | 'assume'
+  const [swapSelectedReplacementId, setSwapSelectedReplacementId] = useState('');
+
   // Helper to auto-select the first available mass time
   const autoSelectTime = (chapelId, dateStr) => {
     if (!chapelId || !dateStr) {
@@ -406,6 +412,91 @@ export default function Schedules() {
     setSelectedAuxCeremonialistIds(schedule.ceremonialistIds || []);
     setScheduleObservation(schedule.observation || '');
     setIsCreateModalOpen(true);
+  };
+
+  const handleOpenSwapModal = (schedule, serverId, serverName, category) => {
+    setSwapTarget({
+      scheduleId: schedule.id,
+      serverId: serverId,
+      serverName: serverName,
+      category: category
+    });
+    setSwapType('direct');
+    setSwapSelectedReplacementId('');
+  };
+
+  const handleRemoveFromServer = async (scheduleId, serverId, serverName, category) => {
+    if (!confirm(`Tem certeza que deseja remover ${serverName} desta escala?`)) {
+      return;
+    }
+
+    const schedule = schedules.find(sc => sc.id === scheduleId);
+    if (!schedule) return;
+
+    let updatedSchedule = { ...schedule };
+
+    if (category === 'main_ceremonialist') {
+      updatedSchedule.mainCeremonialistId = '';
+    } else if (category === 'cerimonialist') {
+      updatedSchedule.ceremonialistIds = (updatedSchedule.ceremonialistIds || []).filter(id => id !== serverId);
+    } else if (category === 'coroinha') {
+      updatedSchedule.serverIds = (updatedSchedule.serverIds || []).filter(id => id !== serverId);
+    }
+
+    // Also clean up from needsSubstituteIds if present
+    updatedSchedule.needsSubstituteIds = (updatedSchedule.needsSubstituteIds || []).filter(id => id !== serverId);
+
+    await updateSchedule(updatedSchedule);
+    
+    // Update local state if the details modal is open
+    if (selectedDetailSchedule && selectedDetailSchedule.id === scheduleId) {
+      setSelectedDetailSchedule(updatedSchedule);
+    }
+    
+    alert(`${serverName} foi removido(a) da escala.`);
+  };
+
+  const handleSwapSubmit = async (e) => {
+    e.preventDefault();
+    if (!swapTarget) return;
+
+    const { scheduleId, serverId, category } = swapTarget;
+    const schedule = schedules.find(sc => sc.id === scheduleId);
+    if (!schedule) return;
+
+    if (!swapSelectedReplacementId) {
+      alert('Selecione um substituto.');
+      return;
+    }
+
+    let updatedSchedule = { ...schedule };
+
+    // Replace the serverId in the schedule
+    if (category === 'main_ceremonialist') {
+      updatedSchedule.mainCeremonialistId = swapSelectedReplacementId;
+    } else if (category === 'cerimonialist') {
+      updatedSchedule.ceremonialistIds = (updatedSchedule.ceremonialistIds || []).map(id => 
+        id === serverId ? swapSelectedReplacementId : id
+      );
+    } else if (category === 'coroinha') {
+      updatedSchedule.serverIds = (updatedSchedule.serverIds || []).map(id => 
+        id === serverId ? swapSelectedReplacementId : id
+      );
+    }
+
+    // Also clean up from needsSubstituteIds if present
+    updatedSchedule.needsSubstituteIds = (updatedSchedule.needsSubstituteIds || []).filter(id => id !== serverId);
+
+    await updateSchedule(updatedSchedule);
+    
+    // Update the local state of the details modal if it's currently open
+    if (selectedDetailSchedule && selectedDetailSchedule.id === scheduleId) {
+      setSelectedDetailSchedule(updatedSchedule);
+    }
+
+    // Close the swap modal
+    setSwapTarget(null);
+    alert('Substituição realizada com sucesso!');
   };
 
   // Add/Remove servers from selection
@@ -650,7 +741,7 @@ export default function Schedules() {
     let content = `
       <html>
         <head>
-          <title>Escala de Altar - Paróquia de Santo Antônio</title>
+          <title>Escalas de Altar</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
             
@@ -908,9 +999,9 @@ export default function Schedules() {
                   <div class="print-page-content">
                     <div class="header">
                       <div class="logo">
-                        <img src="/saint_anthony_icon.png" alt="Santo Antônio" />
+                        <img src="/saint_anthony_icon.png" alt="${chapelName}" />
                       </div>
-                      <h1 class="title">Paróquia de Santo Antônio</h1>
+                      <h1 class="title">${chapelName}</h1>
                       <p class="subtitle">Escala dos Servidores do Altar</p>
                     </div>
 
@@ -1051,7 +1142,7 @@ export default function Schedules() {
                   
                   {userRole === 'admin' && (
                     <div style={{ display: 'flex', gap: '0.35rem' }}>
-                      {sc.published === false && (
+                      {sc.status === 'scheduled' && (
                         <button 
                           style={styles.editBtn} 
                           onClick={(e) => {
@@ -1752,6 +1843,28 @@ export default function Schedules() {
                             {attRecord.status === 'present' ? 'Presente' : attRecord.status === 'absent' ? 'Faltou' : 'Justificado'}
                           </span>
                         )}
+                        {selectedDetailSchedule.status === 'scheduled' && userRole === 'admin' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button 
+                              type="button" 
+                              className="btn btn-secondary" 
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid var(--border-color)', margin: 0 }}
+                              onClick={() => handleOpenSwapModal(selectedDetailSchedule, selectedDetailSchedule.mainCeremonialistId, server.name, 'main_ceremonialist')}
+                              title="Trocar este cerimoniário por outro"
+                            >
+                              <ArrowLeftRight size={12} /> Trocar
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn btn-secondary" 
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid rgba(239, 68, 68, 0.2)', backgroundColor: 'var(--color-absent-bg)', color: 'var(--color-absent)', margin: 0 }}
+                              onClick={() => handleRemoveFromServer(selectedDetailSchedule.id, selectedDetailSchedule.mainCeremonialistId, server.name, 'main_ceremonialist')}
+                              title="Remover este cerimoniário da escala"
+                            >
+                              <Trash2 size={12} /> Remover
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -1774,6 +1887,28 @@ export default function Schedules() {
                             {attRecord.status === 'present' ? 'Presente' : attRecord.status === 'absent' ? 'Faltou' : 'Justificado'}
                           </span>
                         )}
+                        {selectedDetailSchedule.status === 'scheduled' && userRole === 'admin' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button 
+                              type="button" 
+                              className="btn btn-secondary" 
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid var(--border-color)', margin: 0 }}
+                              onClick={() => handleOpenSwapModal(selectedDetailSchedule, id, server.name, 'cerimonialist')}
+                              title="Trocar este cerimoniário por outro"
+                            >
+                              <ArrowLeftRight size={12} /> Trocar
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn btn-secondary" 
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid rgba(239, 68, 68, 0.2)', backgroundColor: 'var(--color-absent-bg)', color: 'var(--color-absent)', margin: 0 }}
+                              onClick={() => handleRemoveFromServer(selectedDetailSchedule.id, id, server.name, 'cerimonialist')}
+                              title="Remover este cerimoniário da escala"
+                            >
+                              <Trash2 size={12} /> Remover
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1795,6 +1930,28 @@ export default function Schedules() {
                           <span className={`badge ${attRecord.status === 'present' ? 'badge-present' : attRecord.status === 'absent' ? 'badge-absent' : 'badge-justified'}`}>
                             {attRecord.status === 'present' ? 'Presente' : attRecord.status === 'absent' ? 'Faltou' : 'Justificado'}
                           </span>
+                        )}
+                        {selectedDetailSchedule.status === 'scheduled' && userRole === 'admin' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button 
+                              type="button" 
+                              className="btn btn-secondary" 
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid var(--border-color)', margin: 0 }}
+                              onClick={() => handleOpenSwapModal(selectedDetailSchedule, id, server.name, 'coroinha')}
+                              title="Trocar este coroinha por outro"
+                            >
+                              <ArrowLeftRight size={12} /> Trocar
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn btn-secondary" 
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid rgba(239, 68, 68, 0.2)', backgroundColor: 'var(--color-absent-bg)', color: 'var(--color-absent)', margin: 0 }}
+                              onClick={() => handleRemoveFromServer(selectedDetailSchedule.id, id, server.name, 'coroinha')}
+                              title="Remover este coroinha da escala"
+                            >
+                              <Trash2 size={12} /> Remover
+                            </button>
+                          </div>
                         )}
                       </div>
                     );
@@ -1907,7 +2064,20 @@ export default function Schedules() {
                 </div>
               )}
 
-              <div style={styles.modalDetailActions}>
+              <div style={{ ...styles.modalDetailActions, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {userRole === 'admin' && selectedDetailSchedule.status === 'scheduled' && (
+                  <button 
+                    type="button" 
+                    className="btn btn-primary" 
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', backgroundColor: 'var(--primary-gold)', color: '#000', fontWeight: 'bold' }} 
+                    onClick={() => {
+                      setSelectedDetailSchedule(null);
+                      openEditModal(selectedDetailSchedule);
+                    }}
+                  >
+                    <Edit3 size={16} /> Editar Escala
+                  </button>
+                )}
                 <button type="button" className="btn btn-secondary" onClick={() => setSelectedDetailSchedule(null)} style={{width: '100%'}}>
                   Fechar Detalhes
                 </button>
@@ -2084,6 +2254,79 @@ export default function Schedules() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* MODAL: SWAP SERVER */}
+      <Modal
+        isOpen={swapTarget !== null}
+        onClose={() => setSwapTarget(null)}
+        title={`Substituir Servidor - ${swapTarget?.serverName}`}
+      >
+        {swapTarget && (() => {
+          const schedule = schedules.find(sc => sc.id === swapTarget.scheduleId);
+          // Filter available servers of the same category
+          const isMainCerem = swapTarget.category === 'main_ceremonialist';
+          const isCerem = swapTarget.category === 'cerimonialist';
+          
+          // Available servers should be active, match the category, and not already in this schedule
+          const availableServers = servers.filter(s => {
+            if (!s.active) return false;
+            // category match
+            if (isMainCerem || isCerem) {
+              if (s.category !== 'cerimoniario') return false;
+            } else {
+              if (s.category !== 'coroinha') return false;
+            }
+            
+            // not already scheduled on this specific schedule
+            if (schedule) {
+              if (schedule.mainCeremonialistId === s.id) return false;
+              if ((schedule.ceremonialistIds || []).includes(s.id)) return false;
+              if ((schedule.serverIds || []).includes(s.id)) return false;
+            }
+            
+            return true;
+          });
+
+          return (
+            <form onSubmit={handleSwapSubmit}>
+              <div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+                  Selecione o servidor que irá substituir <strong>{swapTarget.serverName}</strong> nesta celebração. A alteração ocorrerá imediatamente.
+                </p>
+                
+                <div className="form-group">
+                  <label>Substituto Disponível</label>
+                  <select
+                    className="form-control"
+                    value={swapSelectedReplacementId}
+                    onChange={(e) => setSwapSelectedReplacementId(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecione o substituto...</option>
+                    {availableServers.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {availableServers.length === 0 && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                      Nenhum servidor desta categoria está livre ou ativo no momento.
+                    </span>
+                  )}
+                </div>
+                
+                <div style={styles.formActions}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setSwapTarget(null)}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={availableServers.length === 0} style={{ backgroundColor: 'var(--primary-gold)', color: '#000', fontWeight: 'bold' }}>
+                    Confirmar Substituição
+                  </button>
+                </div>
+              </div>
+            </form>
+          );
+        })()}
       </Modal>
     </div>
   );
