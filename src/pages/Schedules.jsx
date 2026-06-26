@@ -738,12 +738,49 @@ export default function Schedules() {
       return s ? s.name : 'Desconhecido';
     };
 
+    const parseChapelName = (fullName) => {
+      const name = fullName.trim();
+      const lowerName = name.toLowerCase();
+      
+      if (lowerName.startsWith('paróquia de ')) {
+        return {
+          category: 'PARÓQUIA',
+          title: name.substring(12).trim()
+        };
+      } else if (lowerName.startsWith('paróquia ')) {
+        return {
+          category: 'PARÓQUIA',
+          title: name.substring(9).trim()
+        };
+      } else if (lowerName.startsWith('capela de ')) {
+        return {
+          category: 'CAPELA',
+          title: name.substring(10).trim()
+        };
+      } else if (lowerName.startsWith('capela ')) {
+        return {
+          category: 'CAPELA',
+          title: name.substring(7).trim()
+        };
+      } else if (lowerName.startsWith('comunidade ')) {
+        return {
+          category: 'COMUNIDADE',
+          title: name.substring(11).trim()
+        };
+      }
+      
+      return {
+        category: 'PARÓQUIA',
+        title: name
+      };
+    };
+
     let content = `
       <html>
         <head>
           <title>Escalas de Altar</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
             
             body {
               font-family: 'Plus Jakarta Sans', sans-serif;
@@ -783,40 +820,79 @@ export default function Schedules() {
             }
             
             .header {
-              text-align: center;
-              margin-bottom: 15px;
-              border-bottom: 2px solid rgba(217, 119, 6, 0.15);
-              padding-bottom: 10px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 20px;
+              margin-bottom: 25px;
+              border-bottom: 2px solid #2d572c;
+              padding-bottom: 20px;
             }
             
             .logo {
-              margin: 0 0 10px 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin: 0;
             }
             
-            .logo img {
+            .logo svg {
               display: block;
-              margin: 0 auto;
-              height: 55px;
-              width: auto;
+              height: 72px;
+              width: 72px;
             }
             
-            .title {
-              font-family: 'Cinzel', serif;
-              font-size: 1.45rem;
+            .header-text {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              text-align: center;
+            }
+            
+            .header-category {
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              font-size: 0.8rem;
               font-weight: 700;
-              color: #0f172a;
-              margin: 0 0 5px 0;
-              letter-spacing: 0.05em;
               text-transform: uppercase;
+              letter-spacing: 0.25em;
+              color: #2d572c;
+              margin: 0;
+              line-height: 1.2;
             }
             
-            .subtitle {
-              font-size: 0.75rem;
+            .header-title {
+              font-family: 'Playfair Display', Georgia, serif;
+              font-size: 1.7rem;
+              font-weight: 700;
+              color: #2d572c;
+              margin: 2px 0 6px 0;
+              letter-spacing: 0.01em;
+              line-height: 1.2;
+            }
+            
+            .header-subtitle-container {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              width: 100%;
+            }
+            
+            .header-subtitle-line {
+              width: 35px;
+              height: 1.5px;
+              background-color: #2d572c;
+            }
+            
+            .header-subtitle {
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              font-size: 0.65rem;
               font-weight: 700;
               text-transform: uppercase;
               letter-spacing: 0.15em;
-              color: #d97706;
+              color: #2d572c;
               margin: 0;
+              white-space: nowrap;
             }
             
             .schedule-item {
@@ -979,6 +1055,7 @@ export default function Schedules() {
           <div class="schedules-list">
             ${selectedSchedules.map(sc => {
               const chapelName = getChapelName(sc.chapelId);
+              const { category, title } = parseChapelName(chapelName);
               const dateVal = formattedPrintDate(sc.date);
               const dayName = getDayName(sc.date);
               
@@ -999,10 +1076,42 @@ export default function Schedules() {
                   <div class="print-page-content">
                     <div class="header">
                       <div class="logo">
-                        <img src="/saint_anthony_icon.png" alt="${chapelName}" />
+                        <svg viewBox="0 0 100 100" class="header-logo-svg">
+                          <!-- Inner green circle and outer gold border -->
+                          <circle cx="50" cy="50" r="43" fill="#2d572c" stroke="#eab308" stroke-width="5.5" />
+                          <!-- Flower Petals -->
+                          <g>
+                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" />
+                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(60 50 50)" />
+                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(120 50 50)" />
+                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(180 50 50)" />
+                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(240 50 50)" />
+                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(300 50 50)" />
+                          </g>
+                          <!-- Center elements of the flower -->
+                          <circle cx="50" cy="50" r="7.5" fill="#eab308" />
+                          <circle cx="50" cy="50" r="4.5" fill="#2d572c" />
+                          <!-- Small lines radiating between petals in the center -->
+                          <g stroke="#eab308" stroke-width="1.5">
+                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(30 50 50)" />
+                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(90 50 50)" />
+                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(150 50 50)" />
+                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(210 50 50)" />
+                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(270 50 50)" />
+                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(330 50 50)" />
+                          </g>
+                          <circle cx="50" cy="50" r="2.5" fill="#ffffff" />
+                        </svg>
                       </div>
-                      <h1 class="title">${chapelName}</h1>
-                      <p class="subtitle">Escala dos Servidores do Altar</p>
+                      <div class="header-text">
+                        <div class="header-category">${category}</div>
+                        <h1 class="header-title">${title}</h1>
+                        <div class="header-subtitle-container">
+                          <span class="header-subtitle-line"></span>
+                          <span class="header-subtitle">ARQUIDIOCESE DE PALMAS</span>
+                          <span class="header-subtitle-line"></span>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="schedule-item">
