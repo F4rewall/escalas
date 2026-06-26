@@ -728,6 +728,22 @@ export default function Schedules() {
       return ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dayIndex];
     };
 
+    const formatLiturgicalDate = (d) => {
+      if (!d) return '';
+      const parts = d.split('-');
+      const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+      const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+      const weekday = weekdays[dateObj.getDay()];
+      const day = dateObj.getDate();
+      const months = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+      ];
+      const month = months[dateObj.getMonth()];
+      const year = dateObj.getFullYear();
+      return `${weekday}, ${day} de ${month} de ${year}`;
+    };
+
     const getChapelName = (id) => {
       const c = chapels.find(ch => ch.id === id);
       return c ? c.name : 'Capela Desconhecida';
@@ -780,11 +796,11 @@ export default function Schedules() {
         <head>
           <title>Escalas de Altar</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
             
             body {
-              font-family: 'Plus Jakarta Sans', sans-serif;
-              color: #0f172a;
+              font-family: 'EB Garamond', Georgia, serif;
+              color: #1a231b;
               background-color: #f1f5f9;
               margin: 0;
               padding: 0;
@@ -811,8 +827,11 @@ export default function Schedules() {
             }
 
             .print-page-content {
-              border: 3px double #d97706;
-              padding: 1.2cm 1.5cm;
+              border: 2px solid #2d572c;
+              outline: 4px double #b45309;
+              outline-offset: -8px;
+              background-color: #fcfbf7;
+              padding: 1.4cm 1.6cm;
               box-sizing: border-box;
               display: flex;
               flex-direction: column;
@@ -824,9 +843,8 @@ export default function Schedules() {
               align-items: center;
               justify-content: center;
               gap: 20px;
-              margin-bottom: 25px;
-              border-bottom: 2px solid #2d572c;
-              padding-bottom: 20px;
+              margin-bottom: 15px;
+              padding-bottom: 5px;
             }
             
             .logo {
@@ -894,43 +912,92 @@ export default function Schedules() {
               margin: 0;
               white-space: nowrap;
             }
+
+            .header-divider {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 15px;
+              width: 100%;
+              margin-bottom: 25px;
+            }
+            
+            .divider-line {
+              flex-grow: 1;
+              height: 1.5px;
+              background: linear-gradient(to right, transparent, #2d572c 20%, #2d572c 80%, transparent);
+            }
+            
+            .divider-cross {
+              font-family: 'EB Garamond', serif;
+              font-size: 1.3rem;
+              color: #b45309;
+              line-height: 1;
+            }
             
             .schedule-item {
-              border: 1px solid #e2e8f0;
-              border-radius: 10px;
-              padding: 15px;
-              background-color: #f8fafc;
+              border: none;
+              padding: 10px 0;
+              background-color: transparent;
               page-break-inside: avoid;
             }
             
             .chapel-name {
-              font-family: 'Cinzel', serif;
-              font-size: 1.15rem;
-              color: #b45309;
-              margin: 0 0 6px 0;
-              border-bottom: 1px solid rgba(217, 119, 6, 0.1);
-              padding-bottom: 5px;
+              font-family: 'EB Garamond', Georgia, serif;
+              font-size: 1.45rem;
+              font-weight: 700;
+              color: #991b1b;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin: 0 0 15px 0;
+              text-align: center;
+              border-bottom: 1px double #eab308;
+              padding-bottom: 8px;
             }
             
             .meta-info {
               display: flex;
-              gap: 25px;
-              font-size: 0.9rem;
-              font-weight: 700;
-              color: #475569;
-              margin-bottom: 10px;
+              flex-direction: column;
+              align-items: center;
+              gap: 6px;
+              margin-bottom: 25px;
+              font-family: 'EB Garamond', Georgia, serif;
+              text-align: center;
             }
             
-            .meta-info span {
+            .meta-date {
+              font-size: 1.45rem;
+              font-weight: 700;
+              color: #991b1b;
               display: flex;
               align-items: center;
-              gap: 5px;
+              justify-content: center;
+              gap: 8px;
+              letter-spacing: 0.02em;
+            }
+            
+            .meta-date .liturgical-icon {
+              color: #b45309;
+              font-size: 1.2rem;
+            }
+            
+            .meta-time {
+              font-size: 1.25rem;
+              font-weight: 600;
+              color: #1e293b;
+              letter-spacing: 0.03em;
+            }
+            
+            .meta-time .time-label {
+              font-style: italic;
+              color: #475569;
+              margin-right: 4px;
             }
             
             .team-section {
               display: flex;
               flex-direction: column;
-              gap: 8px;
+              gap: 12px;
             }
             
             .team-row {
@@ -942,50 +1009,73 @@ export default function Schedules() {
             }
             
             .role-label {
-              font-weight: 800;
-              color: #b45309;
-              font-size: 1.05rem;
-              border-bottom: 2px solid rgba(217, 119, 6, 0.15);
-              padding-bottom: 3px;
-              margin-bottom: 4px;
+              font-family: 'EB Garamond', Georgia, serif;
+              font-size: 1.25rem;
+              font-weight: 700;
+              color: #991b1b;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              border-bottom: 1.5px solid #b45309;
+              padding-bottom: 4px;
+              margin-bottom: 8px;
+              display: flex;
+              align-items: center;
+              gap: 6px;
             }
             
             .role-values {
-              color: #0f172a;
-              font-weight: 600;
-              padding-left: 5px;
+              color: #1e293b;
+              font-family: 'EB Garamond', Georgia, serif;
+              padding-left: 10px;
               display: grid;
               grid-template-columns: repeat(2, 1fr);
-              gap: 4px 20px;
+              gap: 6px 24px;
+              margin-bottom: 18px;
             }
 
             .name-item {
               margin: 2px 0;
-              font-size: 1rem;
-              font-weight: 700;
-              color: #0f172a;
+              font-size: 1.25rem;
+              font-weight: 600;
+              color: #1e293b;
+              display: flex;
+              align-items: center;
+            }
+
+            .liturgical-bullet {
+              color: #991b1b;
+              margin-right: 8px;
+              font-size: 0.85em;
+              vertical-align: middle;
             }
 
             .observation-box {
-              background-color: #fffbeb;
-              border-left: 5px solid #d97706;
-              padding: 12px 15px;
-              margin-bottom: 20px;
-              border-radius: 0 4px 4px 0;
-              font-size: 1.1rem;
-              color: #78350f;
+              border: 1px dashed #b45309;
+              background-color: #fffdf5;
+              padding: 12px 18px;
+              margin-bottom: 25px;
+              border-radius: 4px;
+              text-align: center;
+              page-break-inside: avoid;
             }
 
             .observation-box strong {
               display: block;
-              font-size: 0.95rem;
-              margin-bottom: 5px;
-              color: #b45309;
+              font-family: 'EB Garamond', Georgia, serif;
+              font-size: 1rem;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              margin-bottom: 6px;
+              color: #991b1b;
             }
 
             .observation-box p {
               margin: 0;
-              font-weight: 600;
+              font-family: 'EB Garamond', Georgia, serif;
+              font-size: 1.15rem;
+              font-style: italic;
+              color: #334155;
               line-height: 1.4;
             }
             
@@ -1010,6 +1100,7 @@ export default function Schedules() {
                 background-color: #fff;
                 padding: 0;
                 margin: 0;
+                font-family: 'EB Garamond', Georgia, serif;
               }
               .schedules-list {
                 display: block !important;
@@ -1034,9 +1125,12 @@ export default function Schedules() {
                 background-color: #ffffff;
               }
               .print-page-content {
-                border: 3px double #d97706 !important;
+                border: 2px solid #2d572c !important;
+                outline: 4px double #b45309 !important;
+                outline-offset: -8px;
+                background-color: #fcfbf7 !important;
                 min-height: calc(100vh - 1.6cm);
-                padding: 1.2cm 1.5cm;
+                padding: 1.4cm 1.6cm;
                 display: flex;
                 flex-direction: column;
                 justify-content: flex-start;
@@ -1045,8 +1139,8 @@ export default function Schedules() {
                 break-inside: avoid !important;
               }
               .schedule-item {
-                background-color: #fff !important;
-                border: 1px solid #cbd5e1 !important;
+                background-color: transparent !important;
+                border: none !important;
               }
             }
           </style>
@@ -1056,8 +1150,7 @@ export default function Schedules() {
             ${selectedSchedules.map(sc => {
               const chapelName = getChapelName(sc.chapelId);
               const { category, title } = parseChapelName(chapelName);
-              const dateVal = formattedPrintDate(sc.date);
-              const dayName = getDayName(sc.date);
+              const liturgicalDateVal = formatLiturgicalDate(sc.date);
               
               const ceremonialists = [];
               if (sc.mainCeremonialistId) {
@@ -1113,17 +1206,27 @@ export default function Schedules() {
                         </div>
                       </div>
                     </div>
+                    <div class="header-divider">
+                      <span class="divider-line"></span>
+                      <span class="divider-cross">✠</span>
+                      <span class="divider-line"></span>
+                    </div>
 
                     <div class="schedule-item">
-                      <h3 class="chapel-name">${chapelName}</h3>
                       <div class="meta-info">
-                        <span>📅 ${dateVal} (${dayName})</span>
-                        <span>⏰ ${formatTime(sc.time)}</span>
+                        <div class="meta-date">
+                          <span class="liturgical-icon">✠</span>
+                          <span class="date-text">${liturgicalDateVal}</span>
+                        </div>
+                        <div class="meta-time">
+                          <span class="time-label">Horário:</span>
+                          <span class="time-value">${formatTime(sc.time)}</span>
+                        </div>
                       </div>
                       
                       ${sc.observation ? `
                         <div class="observation-box">
-                          <strong>⚠️ AVISO PARA ESTA CELEBRAÇÃO:</strong>
+                          <strong>Aviso para esta Celebração:</strong>
                           <p>${sc.observation}</p>
                         </div>
                       ` : ''}
@@ -1133,7 +1236,7 @@ export default function Schedules() {
                           <div class="team-row">
                             <div class="role-label">Cerimoniários:</div>
                             <div class="role-values">
-                              ${ceremonialists.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                              ${ceremonialists.map(name => `<div class="name-item"><span class="liturgical-bullet">✠</span> ${name}</div>`).join('')}
                             </div>
                           </div>
                         ` : ''}
@@ -1141,7 +1244,7 @@ export default function Schedules() {
                           <div class="team-row">
                             <div class="role-label">Coroinhas:</div>
                             <div class="role-values">
-                              ${altarServers.map(name => `<div class="name-item">• ${name}</div>`).join('')}
+                              ${altarServers.map(name => `<div class="name-item"><span class="liturgical-bullet">✠</span> ${name}</div>`).join('')}
                             </div>
                           </div>
                         ` : ''}
