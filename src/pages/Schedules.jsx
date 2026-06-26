@@ -754,6 +754,20 @@ export default function Schedules() {
       return s ? s.name : 'Desconhecido';
     };
 
+    const getRobeIcon = (color) => `
+      <svg viewBox="0 0 100 100" width="16" height="16" style="display: inline-block; vertical-align: middle; margin-right: 8px; flex-shrink: 0;">
+        <!-- Cassock -->
+        <path d="M 35 20 L 18 35 L 26 43 L 34 35 L 34 85 C 34 87 36 89 38 89 L 62 89 C 64 89 66 87 66 85 L 66 35 L 74 43 L 82 35 L 65 20 Z" fill="${color}" />
+        <!-- Surplice -->
+        <path d="M 38 23 L 38 62 L 62 62 L 62 23 Z" fill="#ffffff" />
+        <!-- Surplice sleeves -->
+        <path d="M 34 30 L 24 39 L 29 44 L 34 39 Z" fill="#ffffff" />
+        <path d="M 66 30 L 76 39 L 71 44 L 66 39 Z" fill="#ffffff" />
+        <!-- Neck cutout -->
+        <circle cx="50" cy="20" r="6" fill="#ffffff" />
+      </svg>
+    `;
+
     const parseChapelName = (fullName) => {
       const name = fullName.trim();
       const lowerName = name.toLowerCase();
@@ -796,11 +810,11 @@ export default function Schedules() {
         <head>
           <title>Escalas de Altar</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
             
             body {
-              font-family: 'EB Garamond', Georgia, serif;
-              color: #1a231b;
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              color: #334155;
               background-color: #f1f5f9;
               margin: 0;
               padding: 0;
@@ -827,15 +841,13 @@ export default function Schedules() {
             }
 
             .print-page-content {
-              border: 2px solid #2d572c;
-              outline: 4px double #b45309;
-              outline-offset: -8px;
-              background-color: #fcfbf7;
-              padding: 1.4cm 1.6cm;
+              border: 3px double #d97706;
+              padding: 1.2cm 1.5cm;
               box-sizing: border-box;
               display: flex;
               flex-direction: column;
               min-height: 600px;
+              background-color: #ffffff;
             }
             
             .header {
@@ -843,8 +855,9 @@ export default function Schedules() {
               align-items: center;
               justify-content: center;
               gap: 20px;
-              margin-bottom: 15px;
-              padding-bottom: 5px;
+              margin-bottom: 20px;
+              border-bottom: 1.5px solid rgba(45, 87, 44, 0.15);
+              padding-bottom: 18px;
             }
             
             .logo {
@@ -912,171 +925,105 @@ export default function Schedules() {
               margin: 0;
               white-space: nowrap;
             }
-
-            .header-divider {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 15px;
-              width: 100%;
-              margin-bottom: 25px;
-            }
-            
-            .divider-line {
-              flex-grow: 1;
-              height: 1.5px;
-              background: linear-gradient(to right, transparent, #2d572c 20%, #2d572c 80%, transparent);
-            }
-            
-            .divider-cross {
-              font-family: 'EB Garamond', serif;
-              font-size: 1.3rem;
-              color: #b45309;
-              line-height: 1;
-            }
             
             .schedule-item {
               border: none;
-              padding: 10px 0;
+              padding: 5px 0;
               background-color: transparent;
               page-break-inside: avoid;
             }
             
-            .chapel-name {
-              font-family: 'EB Garamond', Georgia, serif;
-              font-size: 1.45rem;
-              font-weight: 700;
-              color: #991b1b;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-              margin: 0 0 15px 0;
-              text-align: center;
-              border-bottom: 1px double #eab308;
-              padding-bottom: 8px;
-            }
-            
             .meta-info {
               display: flex;
-              flex-direction: column;
-              align-items: center;
-              gap: 6px;
+              justify-content: center;
+              gap: 30px;
               margin-bottom: 25px;
-              font-family: 'EB Garamond', Georgia, serif;
-              text-align: center;
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              font-size: 0.95rem;
+              font-weight: 600;
+              color: #475569;
             }
             
-            .meta-date {
-              font-size: 1.45rem;
-              font-weight: 700;
-              color: #991b1b;
+            .meta-item {
               display: flex;
               align-items: center;
-              justify-content: center;
-              gap: 8px;
-              letter-spacing: 0.02em;
+              gap: 6px;
             }
-            
-            .meta-date .liturgical-icon {
-              color: #b45309;
-              font-size: 1.2rem;
-            }
-            
-            .meta-time {
-              font-size: 1.25rem;
-              font-weight: 600;
-              color: #1e293b;
-              letter-spacing: 0.03em;
-            }
-            
-            .meta-time .time-label {
-              font-style: italic;
-              color: #475569;
-              margin-right: 4px;
+
+            .meta-item svg {
+              color: #d97706;
+              flex-shrink: 0;
             }
             
             .team-section {
               display: flex;
               flex-direction: column;
-              gap: 12px;
+              gap: 15px;
             }
             
             .team-row {
               display: flex;
               flex-direction: column;
-              gap: 4px;
+              gap: 6px;
               line-height: 1.4;
               margin-bottom: 10px;
             }
             
             .role-label {
-              font-family: 'EB Garamond', Georgia, serif;
-              font-size: 1.25rem;
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              font-size: 1.05rem;
               font-weight: 700;
-              color: #991b1b;
+              color: #1e293b;
+              border-bottom: 1.5px solid rgba(226, 232, 240, 0.8);
+              padding-bottom: 6px;
+              margin-bottom: 10px;
               text-transform: uppercase;
-              letter-spacing: 0.08em;
-              border-bottom: 1.5px solid #b45309;
-              padding-bottom: 4px;
-              margin-bottom: 8px;
-              display: flex;
-              align-items: center;
-              gap: 6px;
+              letter-spacing: 0.05em;
             }
             
             .role-values {
-              color: #1e293b;
-              font-family: 'EB Garamond', Georgia, serif;
-              padding-left: 10px;
+              color: #334155;
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              padding-left: 0;
               display: grid;
               grid-template-columns: repeat(2, 1fr);
-              gap: 6px 24px;
-              margin-bottom: 18px;
+              gap: 8px 24px;
+              margin-bottom: 15px;
             }
 
             .name-item {
-              margin: 2px 0;
-              font-size: 1.25rem;
+              margin: 0;
+              font-size: 0.95rem;
               font-weight: 600;
-              color: #1e293b;
+              color: #334155;
               display: flex;
               align-items: center;
             }
 
-            .liturgical-bullet {
-              color: #991b1b;
-              margin-right: 8px;
-              font-size: 0.85em;
-              vertical-align: middle;
-            }
-
             .observation-box {
-              border: 1px dashed #b45309;
-              background-color: #fffdf5;
-              padding: 12px 18px;
+              border-left: 4px solid #ca8a04;
+              background-color: rgba(254, 240, 138, 0.2);
+              padding: 12px 16px;
               margin-bottom: 25px;
               border-radius: 4px;
-              text-align: center;
+              font-size: 0.95rem;
+              color: #713f12;
               page-break-inside: avoid;
             }
 
             .observation-box strong {
               display: block;
-              font-family: 'EB Garamond', Georgia, serif;
-              font-size: 1rem;
+              font-size: 0.85rem;
               font-weight: 700;
               text-transform: uppercase;
-              letter-spacing: 0.08em;
-              margin-bottom: 6px;
-              color: #991b1b;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
             }
 
             .observation-box p {
               margin: 0;
-              font-family: 'EB Garamond', Georgia, serif;
-              font-size: 1.15rem;
-              font-style: italic;
-              color: #334155;
               line-height: 1.4;
+              font-weight: 500;
             }
             
             .footer {
@@ -1100,7 +1047,8 @@ export default function Schedules() {
                 background-color: #fff;
                 padding: 0;
                 margin: 0;
-                font-family: 'EB Garamond', Georgia, serif;
+                font-family: 'Plus Jakarta Sans', sans-serif;
+                color: #334155;
               }
               .schedules-list {
                 display: block !important;
@@ -1125,18 +1073,16 @@ export default function Schedules() {
                 background-color: #ffffff;
               }
               .print-page-content {
-                border: 2px solid #2d572c !important;
-                outline: 4px double #b45309 !important;
-                outline-offset: -8px;
-                background-color: #fcfbf7 !important;
+                border: 3px double #d97706 !important;
                 min-height: calc(100vh - 1.6cm);
-                padding: 1.4cm 1.6cm;
+                padding: 1.2cm 1.5cm;
                 display: flex;
                 flex-direction: column;
                 justify-content: flex-start;
                 box-sizing: border-box;
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
+                background-color: #ffffff !important;
               }
               .schedule-item {
                 background-color: transparent !important;
@@ -1150,7 +1096,8 @@ export default function Schedules() {
             ${selectedSchedules.map(sc => {
               const chapelName = getChapelName(sc.chapelId);
               const { category, title } = parseChapelName(chapelName);
-              const liturgicalDateVal = formatLiturgicalDate(sc.date);
+              const dateVal = formattedPrintDate(sc.date);
+              const dayName = getDayName(sc.date);
               
               const ceremonialists = [];
               if (sc.mainCeremonialistId) {
@@ -1206,21 +1153,16 @@ export default function Schedules() {
                         </div>
                       </div>
                     </div>
-                    <div class="header-divider">
-                      <span class="divider-line"></span>
-                      <span class="divider-cross">✠</span>
-                      <span class="divider-line"></span>
-                    </div>
 
                     <div class="schedule-item">
                       <div class="meta-info">
-                        <div class="meta-date">
-                          <span class="liturgical-icon">✠</span>
-                          <span class="date-text">${liturgicalDateVal}</span>
+                        <div class="meta-item">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                          <span>${dateVal} (${dayName})</span>
                         </div>
-                        <div class="meta-time">
-                          <span class="time-label">Horário:</span>
-                          <span class="time-value">${formatTime(sc.time)}</span>
+                        <div class="meta-item">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                          <span>${formatTime(sc.time)}</span>
                         </div>
                       </div>
                       
@@ -1236,7 +1178,7 @@ export default function Schedules() {
                           <div class="team-row">
                             <div class="role-label">Cerimoniários:</div>
                             <div class="role-values">
-                              ${ceremonialists.map(name => `<div class="name-item"><span class="liturgical-bullet">✠</span> ${name}</div>`).join('')}
+                              ${ceremonialists.map(name => `<div class="name-item">${getRobeIcon('#1e293b')} ${name}</div>`).join('')}
                             </div>
                           </div>
                         ` : ''}
@@ -1244,7 +1186,7 @@ export default function Schedules() {
                           <div class="team-row">
                             <div class="role-label">Coroinhas:</div>
                             <div class="role-values">
-                              ${altarServers.map(name => `<div class="name-item"><span class="liturgical-bullet">✠</span> ${name}</div>`).join('')}
+                              ${altarServers.map(name => `<div class="name-item">${getRobeIcon('#dc2626')} ${name}</div>`).join('')}
                             </div>
                           </div>
                         ` : ''}
