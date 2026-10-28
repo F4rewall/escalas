@@ -29,7 +29,14 @@ export default function Dashboard({ setActiveTab }) {
   
   const upcomingSchedules = schedules
     .filter(s => s.status === 'scheduled')
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
+    .sort((a, b) => {
+      const hasOrderA = typeof a.order === 'number';
+      const hasOrderB = typeof b.order === 'number';
+      if (hasOrderA && hasOrderB) return a.order - b.order;
+      if (hasOrderA) return -1;
+      if (hasOrderB) return 1;
+      return new Date(a.date) - new Date(b.date);
+    });
 
   // Compute overall attendance rate
   const completedSchedules = schedules.filter(s => s.status === 'completed');

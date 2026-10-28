@@ -759,12 +759,18 @@ h1, h2, h3, h4, .brand-font {
   display: flex;
   flex-direction: column;
   position: relative;
-  cursor: pointer;
+  cursor: grab;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
   box-shadow: var(--shadow-md);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease,
+              opacity 0.2s ease,
+              background-color 0.25s ease;
+  user-select: none;
+  touch-action: pan-y;
 }
 
 .app-schedule-card:hover {
@@ -772,6 +778,85 @@ h1, h2, h3, h4, .brand-font {
   border-color: var(--border-color-active);
   box-shadow: var(--shadow-lg), var(--shadow-gold), 0 12px 30px -10px rgba(0, 0, 0, 0.6);
   background: var(--bg-card-hover);
+}
+
+.app-schedule-card:active {
+  cursor: grabbing;
+}
+
+.app-schedule-card.is-dragging {
+  opacity: 0.35 !important;
+  transform: scale(0.96) !important;
+  border: 2px dashed var(--primary-gold) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6) !important;
+  background: rgba(26, 29, 36, 0.6) !important;
+}
+
+.app-schedule-card.is-drag-over {
+  border: 2px solid var(--primary-gold) !important;
+  box-shadow: 0 0 25px rgba(217, 119, 6, 0.45), var(--shadow-lg) !important;
+  transform: translateY(-8px) scale(1.02) !important;
+  background: linear-gradient(145deg, rgba(217, 119, 6, 0.12), var(--bg-card)) !important;
+}
+
+/* Drag Handle Badge */
+.card-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.card-drag-handle:hover {
+  background: rgba(217, 119, 6, 0.15);
+  border-color: rgba(217, 119, 6, 0.4);
+  color: var(--primary-gold);
+}
+
+.card-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Drag Toolbar Elements */
+.drag-info-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 20px;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.btn-reset-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-reset-order:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
 }
 
 /* Chapel Card */

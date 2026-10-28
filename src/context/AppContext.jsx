@@ -59,7 +59,17 @@ export const AppProvider = ({ children }) => {
     });
 
     const unsubSchedules = onSnapshot(collection(db, "schedules"), (snapshot) => {
-      setSchedules(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      let list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      try {
+        const cachedUpcoming = JSON.parse(localStorage.getItem('eh_schedule_order_upcoming') || 'null');
+        if (Array.isArray(cachedUpcoming)) {
+          const map = new Map(cachedUpcoming.map((id, idx) => [id, idx]));
+          list = list.map(sc => map.has(sc.id) && typeof sc.order !== 'number' ? { ...sc, order: map.get(sc.id) } : sc);
+        }
+      } catch (err) {
+        // ignore
+      }
+      setSchedules(list);
       checkLoading();
     }, (err) => {
       console.error("Error loading schedules:", err);
@@ -265,6 +275,83 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const updateSchedulesOrder = async (orderedIds, type = 'upcoming') => {
+    const isUpcoming = type === 'upcoming';
+    const orderField = isUpcoming ? 'order' : 'pastOrder';
+
+    // 1. Instant local update
+    setSchedules((prev) => {
+      const orderMap = new Map();
+      orderedIds.forEach((id, index) => {
+        orderMap.set(id, index);
+      });
+      return prev.map((sc) => {
+        if (orderMap.has(sc.id)) {
+          return { ...sc, [orderField]: orderMap.get(sc.id) };
+        }
+        return sc;
+      });
+    });
+
+    // 2. Persist to localStorage
+    try {
+      localStorage.setItem(`eh_schedule_order_${type}`, JSON.stringify(orderedIds));
+    } catch (e) {
+      console.warn("Error saving order to localStorage:", e);
+    }
+
+    // 3. Batch update in Firestore
+    try {
+      const batch = writeBatch(db);
+      orderedIds.forEach((id, index) => {
+        const docRef = doc(db, "schedules", id);
+        batch.update(docRef, { [orderField]: index });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Error updating schedules order in Firestore:", e);
+    }
+  };
+
+  const resetSchedulesOrder = async (type = 'upcoming') => {
+    const isUpcoming = type === 'upcoming';
+    const orderField = isUpcoming ? 'order' : 'pastOrder';
+
+    try {
+      localStorage.removeItem(`eh_schedule_order_${type}`);
+    } catch (e) {
+      console.warn(e);
+    }
+
+    const targetSchedules = schedules.filter((s) =>
+      isUpcoming ? s.status === 'scheduled' : s.status === 'completed'
+    );
+
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if ((isUpcoming && s.status === 'scheduled') || (!isUpcoming && s.status === 'completed')) {
+          const copy = { ...s };
+          delete copy[orderField];
+          return copy;
+        }
+        return s;
+      })
+    );
+
+    try {
+      const batch = writeBatch(db);
+      targetSchedules.forEach((sc) => {
+        if (typeof sc[orderField] === 'number') {
+          const docRef = doc(db, "schedules", sc.id);
+          batch.update(docRef, { [orderField]: null });
+        }
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Error resetting schedules order in Firestore:", e);
+    }
+  };
+
   // --- Attendance and Report Submission ---
   const submitAttendanceAndReport = async (scheduleId, attendanceRecords, reportData) => {
     try {
@@ -365,6 +452,8 @@ export const AppProvider = ({ children }) => {
         addSchedule,
         updateSchedule,
         deleteSchedule,
+        updateSchedulesOrder,
+        resetSchedulesOrder,
         submitAttendanceAndReport,
         getServerStats,
         clearAllData,

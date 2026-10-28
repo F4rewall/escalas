@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { 
@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   KeyRound,
   Edit3,
-  ArrowLeftRight
+  ArrowLeftRight,
+  GripVertical,
+  RotateCcw
 } from 'lucide-react';
 
 // Helper to get next N Saturdays (dayOfWeek = 6) or Sundays (dayOfWeek = 0)
@@ -254,6 +256,8 @@ export default function Schedules() {
     addSchedule, 
     updateSchedule,
     deleteSchedule, 
+    updateSchedulesOrder,
+    resetSchedulesOrder,
     submitAttendanceAndReport,
     attendance,
     reports
@@ -361,16 +365,55 @@ export default function Schedules() {
   const [reportVerificarOutras, setReportVerificarOutras] = useState('');
   const [reportConfirmacao, setReportConfirmacao] = useState('');
 
-  // 1. Group/Filter schedules with safe sorting
+  // Drag and drop states for manual reordering
+  const [draggedId, setDraggedId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const isDraggingRef = useRef(false);
+  const touchDraggedIdRef = useRef(null);
+
+  // 1. Group/Filter schedules with safe sorting and manual custom order
   const upcomingSchedules = schedules
     .filter(s => s.status === 'scheduled' && (userRole === 'admin' || s.published !== false))
-    .sort((a, b) => new Date(a.date || '') - new Date(b.date || ''));
+    .sort((a, b) => {
+      const hasOrderA = typeof a.order === 'number';
+      const hasOrderB = typeof b.order === 'number';
+      if (hasOrderA && hasOrderB) return a.order - b.order;
+      if (hasOrderA) return -1;
+      if (hasOrderB) return 1;
+      return new Date(a.date || '') - new Date(b.date || '');
+    });
 
   const pastSchedules = schedules
     .filter(s => s.status === 'completed' && (userRole === 'admin' || s.published !== false))
-    .sort((a, b) => new Date(b.date || '') - new Date(a.date || ''));
+    .sort((a, b) => {
+      const hasOrderA = typeof a.pastOrder === 'number';
+      const hasOrderB = typeof b.pastOrder === 'number';
+      if (hasOrderA && hasOrderB) return a.pastOrder - b.pastOrder;
+      if (hasOrderA) return -1;
+      if (hasOrderB) return 1;
+      return new Date(b.date || '') - new Date(a.date || '');
+    });
 
   const activeSchedules = activeSubTab === 'upcoming' ? upcomingSchedules : pastSchedules;
+  const hasCustomOrder = activeSchedules.some(s => 
+    activeSubTab === 'upcoming' 
+      ? typeof s.order === 'number' 
+      : typeof s.pastOrder === 'number'
+  );
+
+  const handleReorder = (sourceId, targetId) => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    const currentList = [...activeSchedules];
+    const sourceIndex = currentList.findIndex(s => s.id === sourceId);
+    const targetIndex = currentList.findIndex(s => s.id === targetId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const [moved] = currentList.splice(sourceIndex, 1);
+    currentList.splice(targetIndex, 0, moved);
+
+    const orderedIds = currentList.map(s => s.id);
+    updateSchedulesOrder(orderedIds, activeSubTab);
+  };
 
   // Helpers
   const getChapel = (id) => chapels.find(c => c.id === id) || { name: 'Capela Desconhecida', massTimes: [] };
@@ -702,15 +745,44 @@ export default function Schedules() {
     }
   };
 
-  // Print PDF Generator
+  // Move item up/down in share selection order
+  const handleMoveShareOrder = (id, direction) => {
+    setSelectedShareIds(prev => {
+      const index = prev.indexOf(id);
+      if (index === -1) return prev;
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(index, 1);
+      next.splice(targetIndex, 0, item);
+      return next;
+    });
+  };
+
+  // Print PDF Generator (Grouped by Day, following the exact user selection order)
   const handlePrintSchedules = () => {
     if (selectedShareIds.length === 0) {
       alert('Selecione pelo menos uma escala para compartilhar.');
       return;
     }
 
-    const selectedSchedules = schedules.filter(sc => selectedShareIds.includes(sc.id));
-    selectedSchedules.sort((a, b) => new Date(a.date || '') - new Date(b.date || ''));
+    // Maintain the EXACT order in which the user selected the schedules
+    const selectedSchedules = selectedShareIds
+      .map(id => schedules.find(sc => sc.id === id))
+      .filter(Boolean);
+
+    // Group selected schedules by date (1 page per day)
+    const groupsByDate = {};
+    const dateOrder = [];
+
+    selectedSchedules.forEach(sc => {
+      const dateKey = sc.date || 'sem-data';
+      if (!groupsByDate[dateKey]) {
+        groupsByDate[dateKey] = [];
+        dateOrder.push(dateKey);
+      }
+      groupsByDate[dateKey].push(sc);
+    });
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -718,18 +790,8 @@ export default function Schedules() {
       return;
     }
 
-    const formattedPrintDate = (d) => {
-      const parts = d.split('-');
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    };
-
-    const getDayName = (d) => {
-      const dayIndex = new Date(d + 'T00:00:00').getDay();
-      return ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dayIndex];
-    };
-
     const formatLiturgicalDate = (d) => {
-      if (!d) return '';
+      if (!d || d === 'sem-data') return 'Data a Definir';
       const parts = d.split('-');
       const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
       const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -755,7 +817,7 @@ export default function Schedules() {
     };
 
     const getRobeIcon = (color) => `
-      <svg viewBox="0 0 100 100" width="16" height="16" style="display: inline-block; vertical-align: middle; margin-right: 8px; flex-shrink: 0;">
+      <svg viewBox="0 0 100 100" width="14" height="14" style="display: inline-block; vertical-align: middle; margin-right: 6px; flex-shrink: 0;">
         <!-- Cassock -->
         <path d="M 35 20 L 18 35 L 26 43 L 34 35 L 34 85 C 34 87 36 89 38 89 L 62 89 C 64 89 66 87 66 85 L 66 35 L 74 43 L 82 35 L 65 20 Z" fill="${color}" />
         <!-- Surplice -->
@@ -773,45 +835,30 @@ export default function Schedules() {
       const lowerName = name.toLowerCase();
       
       if (lowerName.startsWith('paróquia de ')) {
-        return {
-          category: 'PARÓQUIA',
-          title: name.substring(12).trim()
-        };
+        return { category: 'PARÓQUIA', title: name.substring(12).trim() };
       } else if (lowerName.startsWith('paróquia ')) {
-        return {
-          category: 'PARÓQUIA',
-          title: name.substring(9).trim()
-        };
+        return { category: 'PARÓQUIA', title: name.substring(9).trim() };
       } else if (lowerName.startsWith('capela de ')) {
-        return {
-          category: 'CAPELA',
-          title: name.substring(10).trim()
-        };
+        return { category: 'CAPELA', title: name.substring(10).trim() };
       } else if (lowerName.startsWith('capela ')) {
-        return {
-          category: 'CAPELA',
-          title: name.substring(7).trim()
-        };
+        return { category: 'CAPELA', title: name.substring(7).trim() };
       } else if (lowerName.startsWith('comunidade ')) {
-        return {
-          category: 'COMUNIDADE',
-          title: name.substring(11).trim()
-        };
+        return { category: 'COMUNIDADE', title: name.substring(11).trim() };
       }
-      
-      return {
-        category: 'PARÓQUIA',
-        title: name
-      };
+      return { category: 'PARÓQUIA', title: name };
     };
 
     let content = `
       <html>
         <head>
-          <title>Escalas de Altar</title>
+          <title>Escalas de Altar - Arquidiocese de Palmas</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
             
+            * {
+              box-sizing: border-box;
+            }
+
             body {
               font-family: 'Plus Jakarta Sans', sans-serif;
               color: #334155;
@@ -823,41 +870,48 @@ export default function Schedules() {
             .schedules-list {
               display: flex;
               flex-direction: column;
-              gap: 40px;
+              gap: 30px;
               align-items: center;
-              padding: 40px 20px;
+              padding: 30px 20px;
             }
             
             .print-page {
               background-color: #ffffff;
               width: 100%;
-              max-width: 800px;
+              max-width: 860px;
               padding: 0.8cm;
               box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-              box-sizing: border-box;
               border-radius: 16px;
               page-break-after: always;
+              break-after: page;
               page-break-inside: avoid;
+              box-sizing: border-box;
+            }
+
+            .print-page:last-child {
+              page-break-after: auto;
+              break-after: auto;
             }
 
             .print-page-content {
               border: 3px double #d97706;
-              padding: 1.2cm 1.5cm;
-              box-sizing: border-box;
+              padding: 0.9cm 1.1cm;
               display: flex;
               flex-direction: column;
-              min-height: 600px;
+              min-height: 850px;
               background-color: #ffffff;
+              justify-content: space-between;
+              box-sizing: border-box;
             }
             
-            .header {
+            .day-header {
               display: flex;
               align-items: center;
               justify-content: center;
-              gap: 20px;
-              margin-bottom: 20px;
-              border-bottom: 1.5px solid rgba(45, 87, 44, 0.15);
-              padding-bottom: 18px;
+              gap: 16px;
+              margin-bottom: 18px;
+              border-bottom: 2px solid rgba(45, 87, 44, 0.15);
+              padding-bottom: 12px;
             }
             
             .logo {
@@ -869,8 +923,8 @@ export default function Schedules() {
             
             .logo svg {
               display: block;
-              height: 72px;
-              width: 72px;
+              height: 62px;
+              width: 62px;
             }
             
             .header-text {
@@ -882,10 +936,10 @@ export default function Schedules() {
             
             .header-category {
               font-family: 'Plus Jakarta Sans', sans-serif;
-              font-size: 0.8rem;
+              font-size: 0.72rem;
               font-weight: 700;
               text-transform: uppercase;
-              letter-spacing: 0.25em;
+              letter-spacing: 0.22em;
               color: #2d572c;
               margin: 0;
               line-height: 1.2;
@@ -893,10 +947,10 @@ export default function Schedules() {
             
             .header-title {
               font-family: 'Playfair Display', Georgia, serif;
-              font-size: 1.7rem;
+              font-size: 1.55rem;
               font-weight: 700;
               color: #2d572c;
-              margin: 2px 0 6px 0;
+              margin: 3px 0 4px 0;
               letter-spacing: 0.01em;
               line-height: 1.2;
             }
@@ -905,139 +959,165 @@ export default function Schedules() {
               display: flex;
               align-items: center;
               justify-content: center;
-              gap: 10px;
+              gap: 8px;
               width: 100%;
             }
             
             .header-subtitle-line {
-              width: 35px;
+              width: 32px;
               height: 1.5px;
               background-color: #2d572c;
             }
             
             .header-subtitle {
               font-family: 'Plus Jakarta Sans', sans-serif;
-              font-size: 0.65rem;
+              font-size: 0.62rem;
               font-weight: 700;
               text-transform: uppercase;
-              letter-spacing: 0.15em;
+              letter-spacing: 0.14em;
               color: #2d572c;
               margin: 0;
               white-space: nowrap;
             }
-            
-            .schedule-item {
-              border: none;
-              padding: 5px 0;
-              background-color: transparent;
-              page-break-inside: avoid;
-            }
-            
-            .meta-info {
+
+            .celebrations-list {
               display: flex;
-              justify-content: center;
-              gap: 30px;
-              margin-bottom: 25px;
-              font-family: 'Plus Jakarta Sans', sans-serif;
-              font-size: 0.95rem;
-              font-weight: 600;
-              color: #475569;
-            }
-            
-            .meta-item {
-              display: flex;
-              align-items: center;
-              gap: 6px;
+              flex-direction: column;
+              gap: 14px;
+              flex: 1;
             }
 
-            .meta-item svg {
+            .celebration-card {
+              border: 1px solid #e2e8f0;
+              border-left: 5px solid #d97706;
+              background-color: #fafbfc;
+              border-radius: 8px;
+              padding: 12px 16px;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+
+            .celebration-top {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+              padding-bottom: 6px;
+              border-bottom: 1px solid #f1f5f9;
+            }
+
+            .celebration-title-wrap {
+              display: flex;
+              flex-direction: column;
+            }
+
+            .celebration-category {
+              font-size: 0.65rem;
+              font-weight: 700;
               color: #d97706;
-              flex-shrink: 0;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
             }
-            
-            .team-section {
-              display: flex;
-              flex-direction: column;
-              gap: 15px;
-            }
-            
-            .team-row {
-              display: flex;
-              flex-direction: column;
-              gap: 6px;
-              line-height: 1.4;
-              margin-bottom: 10px;
-            }
-            
-            .role-label {
-              font-family: 'Plus Jakarta Sans', sans-serif;
-              font-size: 1.05rem;
+
+            .celebration-title {
+              font-family: 'Playfair Display', Georgia, serif;
+              font-size: 1.15rem;
               font-weight: 700;
               color: #1e293b;
-              border-bottom: 1.5px solid rgba(226, 232, 240, 0.8);
-              padding-bottom: 6px;
-              margin-bottom: 10px;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-            }
-            
-            .role-values {
-              color: #334155;
-              font-family: 'Plus Jakarta Sans', sans-serif;
-              padding-left: 0;
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 8px 24px;
-              margin-bottom: 15px;
+              margin: 0;
             }
 
-            .name-item {
-              margin: 0;
-              font-size: 0.95rem;
-              font-weight: 600;
-              color: #334155;
+            .celebration-time-badge {
               display: flex;
               align-items: center;
+              gap: 5px;
+              background: #fef3c7;
+              border: 1px solid #fde68a;
+              color: #92400e;
+              font-size: 0.82rem;
+              font-weight: 700;
+              padding: 3px 10px;
+              border-radius: 20px;
+              white-space: nowrap;
+            }
+
+            .celebration-time-badge svg {
+              color: #d97706;
             }
 
             .observation-box {
-              border-left: 4px solid #ca8a04;
-              background-color: rgba(254, 240, 138, 0.2);
-              padding: 12px 16px;
-              margin-bottom: 25px;
+              border-left: 3px solid #ca8a04;
+              background-color: rgba(254, 240, 138, 0.25);
+              padding: 7px 12px;
+              margin-bottom: 8px;
               border-radius: 4px;
-              font-size: 0.95rem;
+              font-size: 0.82rem;
               color: #713f12;
-              page-break-inside: avoid;
             }
 
             .observation-box strong {
-              display: block;
-              font-size: 0.85rem;
+              font-size: 0.75rem;
               font-weight: 700;
               text-transform: uppercase;
-              letter-spacing: 0.05em;
-              margin-bottom: 4px;
+              letter-spacing: 0.04em;
+              display: block;
+              margin-bottom: 2px;
             }
 
             .observation-box p {
               margin: 0;
-              line-height: 1.4;
-              font-weight: 500;
+              line-height: 1.3;
             }
-            
+
+            .team-section {
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+            }
+
+            .team-row {
+              display: flex;
+              flex-direction: column;
+              gap: 3px;
+            }
+
+            .role-label {
+              font-size: 0.8rem;
+              font-weight: 700;
+              color: #475569;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              margin-bottom: 2px;
+            }
+
+            .role-values {
+              color: #334155;
+              padding-left: 0;
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 4px 16px;
+            }
+
+            .name-item {
+              margin: 0;
+              font-size: 0.86rem;
+              font-weight: 600;
+              color: #334155;
+              display: flex;
+              align-items: center;
+            }
+
             .footer {
               text-align: center;
-              margin-top: 50px;
-              font-size: 0.75rem;
+              margin-top: 14px;
+              font-size: 0.68rem;
               color: #94a3b8;
               text-transform: uppercase;
               letter-spacing: 0.1em;
               border-top: 1px solid #e2e8f0;
-              padding-top: 20px;
-              margin-top: auto;
+              padding-top: 8px;
             }
-            
+
             @media print {
               @page {
                 margin: 0;
@@ -1047,7 +1127,6 @@ export default function Schedules() {
                 background-color: #fff;
                 padding: 0;
                 margin: 0;
-                font-family: 'Plus Jakarta Sans', sans-serif;
                 color: #334155;
               }
               .schedules-list {
@@ -1058,144 +1137,161 @@ export default function Schedules() {
               }
               .print-page {
                 border: none !important;
-                box-shadow: none;
-                border-radius: 0;
-                padding: 0.8cm;
-                margin: 0;
-                width: 100%;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                padding: 0.6cm 0.8cm !important;
+                margin: 0 !important;
+                width: 100% !important;
                 min-height: 100vh;
-                page-break-after: always;
-                page-break-inside: avoid;
-                break-after: page;
-                break-inside: avoid;
+                page-break-after: always !important;
+                break-after: page !important;
                 box-sizing: border-box;
-                display: block;
-                background-color: #ffffff;
+                display: flex !important;
+                flex-direction: column !important;
+                background-color: #ffffff !important;
+              }
+              .print-page:last-child {
+                page-break-after: auto !important;
+                break-after: auto !important;
               }
               .print-page-content {
                 border: 3px double #d97706 !important;
-                min-height: calc(100vh - 1.6cm);
-                padding: 1.2cm 1.5cm;
-                display: flex;
-                flex-direction: column;
-                justify-content: flex-start;
+                flex: 1;
+                min-height: calc(100vh - 1.2cm);
+                padding: 0.7cm 1cm !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
                 box-sizing: border-box;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
                 background-color: #ffffff !important;
               }
-              .schedule-item {
-                background-color: transparent !important;
-                border: none !important;
+              .celebration-card {
+                background-color: #fff !important;
+                border: 1px solid #cbd5e1 !important;
+                border-left: 5px solid #d97706 !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
               }
             }
           </style>
         </head>
         <body>
           <div class="schedules-list">
-            ${selectedSchedules.map(sc => {
-              const chapelName = getChapelName(sc.chapelId);
-              const { category, title } = parseChapelName(chapelName);
-              const dateVal = formattedPrintDate(sc.date);
-              const dayName = getDayName(sc.date);
-              
-              const ceremonialists = [];
-              if (sc.mainCeremonialistId) {
-                ceremonialists.push(getServerName(sc.mainCeremonialistId) + ' (Principal)');
-              }
-              if (sc.ceremonialistIds && sc.ceremonialistIds.length > 0) {
-                sc.ceremonialistIds.forEach(id => {
-                  ceremonialists.push(getServerName(id));
-                });
-              }
-              
-              const altarServers = sc.serverIds.map(id => getServerName(id));
-              
+            ${dateOrder.map(dateKey => {
+              const daySchedules = groupsByDate[dateKey];
+              const dateTitle = formatLiturgicalDate(dateKey);
+
               return `
                 <div class="print-page">
                   <div class="print-page-content">
-                    <div class="header">
-                      <div class="logo">
-                        <svg viewBox="0 0 100 100" class="header-logo-svg">
-                          <!-- Inner green circle and outer gold border -->
-                          <circle cx="50" cy="50" r="43" fill="#2d572c" stroke="#eab308" stroke-width="5.5" />
-                          <!-- Flower Petals -->
-                          <g>
-                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" />
-                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(60 50 50)" />
-                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(120 50 50)" />
-                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(180 50 50)" />
-                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(240 50 50)" />
-                            <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(300 50 50)" />
-                          </g>
-                          <!-- Center elements of the flower -->
-                          <circle cx="50" cy="50" r="7.5" fill="#eab308" />
-                          <circle cx="50" cy="50" r="4.5" fill="#2d572c" />
-                          <!-- Small lines radiating between petals in the center -->
-                          <g stroke="#eab308" stroke-width="1.5">
-                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(30 50 50)" />
-                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(90 50 50)" />
-                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(150 50 50)" />
-                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(210 50 50)" />
-                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(270 50 50)" />
-                            <line x1="50" y1="50" x2="50" y2="40" transform="rotate(330 50 50)" />
-                          </g>
-                          <circle cx="50" cy="50" r="2.5" fill="#ffffff" />
-                        </svg>
-                      </div>
-                      <div class="header-text">
-                        <div class="header-category">${category}</div>
-                        <h1 class="header-title">${title}</h1>
-                        <div class="header-subtitle-container">
-                          <span class="header-subtitle-line"></span>
-                          <span class="header-subtitle">ARQUIDIOCESE DE PALMAS</span>
-                          <span class="header-subtitle-line"></span>
+                    <div>
+                      <div class="day-header">
+                        <div class="logo">
+                          <svg viewBox="0 0 100 100" class="header-logo-svg">
+                            <circle cx="50" cy="50" r="43" fill="#2d572c" stroke="#eab308" stroke-width="5.5" />
+                            <g>
+                              <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" />
+                              <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(60 50 50)" />
+                              <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(120 50 50)" />
+                              <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(180 50 50)" />
+                              <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(240 50 50)" />
+                              <path d="M50 50 C 41 35, 41 20, 50 15 C 59 20, 59 35, 50 50" fill="#ffffff" transform="rotate(300 50 50)" />
+                            </g>
+                            <circle cx="50" cy="50" r="7.5" fill="#eab308" />
+                            <circle cx="50" cy="50" r="4.5" fill="#2d572c" />
+                            <g stroke="#eab308" stroke-width="1.5">
+                              <line x1="50" y1="50" x2="50" y2="40" transform="rotate(30 50 50)" />
+                              <line x1="50" y1="50" x2="50" y2="40" transform="rotate(90 50 50)" />
+                              <line x1="50" y1="50" x2="50" y2="40" transform="rotate(150 50 50)" />
+                              <line x1="50" y1="50" x2="50" y2="40" transform="rotate(210 50 50)" />
+                              <line x1="50" y1="50" x2="50" y2="40" transform="rotate(270 50 50)" />
+                              <line x1="50" y1="50" x2="50" y2="40" transform="rotate(330 50 50)" />
+                            </g>
+                            <circle cx="50" cy="2.5" fill="#ffffff" />
+                          </svg>
                         </div>
+                        <div class="header-text">
+                          <div class="header-category">ARQUIDIOCESE DE PALMAS • PARÓQUIA SANTO ANTÔNIO DE LISBOA</div>
+                          <h1 class="header-title">${dateTitle}</h1>
+                          <div class="header-subtitle-container">
+                            <span class="header-subtitle-line"></span>
+                            <span class="header-subtitle">ESCALA GERAL DE CELEBRAÇÕES</span>
+                            <span class="header-subtitle-line"></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="celebrations-list">
+                        ${daySchedules.map(sc => {
+                          const chapelName = getChapelName(sc.chapelId);
+                          const { category, title } = parseChapelName(chapelName);
+                          
+                          const ceremonialists = [];
+                          if (sc.mainCeremonialistId) {
+                            ceremonialists.push(getServerName(sc.mainCeremonialistId) + ' (Principal)');
+                          }
+                          if (sc.ceremonialistIds && sc.ceremonialistIds.length > 0) {
+                            sc.ceremonialistIds.forEach(id => {
+                              ceremonialists.push(getServerName(id));
+                            });
+                          }
+                          
+                          const altarServers = sc.serverIds.map(id => getServerName(id));
+
+                          return `
+                            <div class="celebration-card">
+                              <div class="celebration-top">
+                                <div class="celebration-title-wrap">
+                                  <span class="celebration-category">${category}</span>
+                                  <h2 class="celebration-title">${title}</h2>
+                                </div>
+                                <div class="celebration-time-badge">
+                                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                  </svg>
+                                  <span>${formatTime(sc.time)}</span>
+                                </div>
+                              </div>
+
+                              ${sc.observation ? `
+                                <div class="observation-box">
+                                  <strong>Aviso:</strong>
+                                  <p>${sc.observation}</p>
+                                </div>
+                              ` : ''}
+
+                              <div class="team-section">
+                                ${ceremonialists.length > 0 ? `
+                                  <div class="team-row">
+                                    <div class="role-label">Cerimoniários:</div>
+                                    <div class="role-values">
+                                      ${ceremonialists.map(name => `<div class="name-item">${getRobeIcon('#1e293b')} ${name}</div>`).join('')}
+                                    </div>
+                                  </div>
+                                ` : ''}
+                                ${altarServers.length > 0 ? `
+                                  <div class="team-row">
+                                    <div class="role-label">Coroinhas:</div>
+                                    <div class="role-values">
+                                      ${altarServers.map(name => `<div class="name-item">${getRobeIcon('#dc2626')} ${name}</div>`).join('')}
+                                    </div>
+                                  </div>
+                                ` : ''}
+                                ${ceremonialists.length === 0 && altarServers.length === 0 ? `
+                                  <div class="team-row">
+                                    <div class="role-values" style="font-style: italic; color: #94a3b8; font-size: 0.95rem;">Nenhum servidor escalado.</div>
+                                  </div>
+                                ` : ''}
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
                       </div>
                     </div>
 
-                    <div class="schedule-item">
-                      <div class="meta-info">
-                        <div class="meta-item">
-                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                          <span>${dateVal} (${dayName})</span>
-                        </div>
-                        <div class="meta-item">
-                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                          <span>${formatTime(sc.time)}</span>
-                        </div>
-                      </div>
-                      
-                      ${sc.observation ? `
-                        <div class="observation-box">
-                          <strong>Aviso para esta Celebração:</strong>
-                          <p>${sc.observation}</p>
-                        </div>
-                      ` : ''}
-
-                      <div class="team-section">
-                        ${ceremonialists.length > 0 ? `
-                          <div class="team-row">
-                            <div class="role-label">Cerimoniários:</div>
-                            <div class="role-values">
-                              ${ceremonialists.map(name => `<div class="name-item">${getRobeIcon('#1e293b')} ${name}</div>`).join('')}
-                            </div>
-                          </div>
-                        ` : ''}
-                        ${altarServers.length > 0 ? `
-                          <div class="team-row">
-                            <div class="role-label">Coroinhas:</div>
-                            <div class="role-values">
-                              ${altarServers.map(name => `<div class="name-item">${getRobeIcon('#dc2626')} ${name}</div>`).join('')}
-                            </div>
-                          </div>
-                        ` : ''}
-                        ${ceremonialists.length === 0 && altarServers.length === 0 ? `
-                          <div class="team-row">
-                            <div class="role-values" style="font-style: italic; color: #94a3b8; font-size: 1.1rem;">Nenhum servidor escalado.</div>
-                          </div>
-                        ` : ''}
-                      </div>
+                    <div class="footer">
+                      Paróquia Santo Antônio de Lisboa • Arquidiocese de Palmas • Escala de Servidores do Altar
                     </div>
                   </div>
                 </div>
@@ -1241,26 +1337,47 @@ export default function Schedules() {
         )}
       </div>
 
-      {/* Tabs */}
-      <div style={styles.subTabs}>
-        <button 
-          style={{
-            ...styles.subTabBtn,
-            ...(activeSubTab === 'upcoming' ? styles.subTabBtnActive : {})
-          }}
-          onClick={() => setActiveSubTab('upcoming')}
-        >
-          Próximas Escalas ({upcomingSchedules.length})
-        </button>
-        <button 
-          style={{
-            ...styles.subTabBtn,
-            ...(activeSubTab === 'past' ? styles.subTabBtnActive : {})
-          }}
-          onClick={() => setActiveSubTab('past')}
-        >
-          Escalas Realizadas ({pastSchedules.length})
-        </button>
+      {/* Tabs and Reorder Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <div style={styles.subTabs}>
+          <button 
+            style={{
+              ...styles.subTabBtn,
+              ...(activeSubTab === 'upcoming' ? styles.subTabBtnActive : {})
+            }}
+            onClick={() => setActiveSubTab('upcoming')}
+          >
+            Próximas Escalas ({upcomingSchedules.length})
+          </button>
+          <button 
+            style={{
+              ...styles.subTabBtn,
+              ...(activeSubTab === 'past' ? styles.subTabBtnActive : {})
+            }}
+            onClick={() => setActiveSubTab('past')}
+          >
+            Escalas Realizadas ({pastSchedules.length})
+          </button>
+        </div>
+
+        {activeSchedules.length > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+            <div className="drag-info-pill">
+              <GripVertical size={13} style={{ color: 'var(--primary-gold)' }} />
+              <span>Arraste os cartões para ordenar</span>
+            </div>
+            {hasCustomOrder && (
+              <button 
+                type="button"
+                className="btn-reset-order"
+                onClick={() => resetSchedulesOrder(activeSubTab)}
+                title="Restaurar a ordem cronológica por data"
+              >
+                <RotateCcw size={12} /> Ordem por Data
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Schedule Display Grid */}
@@ -1278,11 +1395,90 @@ export default function Schedules() {
         <div className="grid-cards">
           {activeSchedules.map(sc => {
             const chapel = getChapel(sc.chapelId);
+            const isItemDragging = draggedId === sc.id;
+            const isItemOver = dragOverId === sc.id;
+
             return (
               <div 
                 key={sc.id} 
-                className="app-schedule-card" 
-                onClick={() => setSelectedDetailSchedule(sc)}
+                data-schedule-id={sc.id}
+                className={`app-schedule-card ${isItemDragging ? 'is-dragging' : ''} ${isItemOver ? 'is-drag-over' : ''}`}
+                draggable={true}
+                onDragStart={(e) => {
+                  isDraggingRef.current = true;
+                  setDraggedId(sc.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', sc.id);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverId !== sc.id) {
+                    setDragOverId(sc.id);
+                  }
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  if (draggedId && draggedId !== sc.id) {
+                    setDragOverId(sc.id);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget.contains(e.relatedTarget)) return;
+                  if (dragOverId === sc.id) {
+                    setDragOverId(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const sourceId = e.dataTransfer.getData('text/plain') || draggedId;
+                  handleReorder(sourceId, sc.id);
+                  setDraggedId(null);
+                  setDragOverId(null);
+                  setTimeout(() => {
+                    isDraggingRef.current = false;
+                  }, 150);
+                }}
+                onDragEnd={() => {
+                  setDraggedId(null);
+                  setDragOverId(null);
+                  setTimeout(() => {
+                    isDraggingRef.current = false;
+                  }, 150);
+                }}
+                onTouchStart={(e) => {
+                  if (e.target.closest('button, a, input, select')) return;
+                  touchDraggedIdRef.current = sc.id;
+                  setDraggedId(sc.id);
+                }}
+                onTouchMove={(e) => {
+                  if (!touchDraggedIdRef.current) return;
+                  isDraggingRef.current = true;
+                  const touch = e.touches[0];
+                  const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+                  const card = elem?.closest('[data-schedule-id]');
+                  if (card) {
+                    const overId = card.getAttribute('data-schedule-id');
+                    if (overId && overId !== touchDraggedIdRef.current) {
+                      setDragOverId(overId);
+                    }
+                  }
+                }}
+                onTouchEnd={() => {
+                  if (touchDraggedIdRef.current && dragOverId && touchDraggedIdRef.current !== dragOverId) {
+                    handleReorder(touchDraggedIdRef.current, dragOverId);
+                  }
+                  touchDraggedIdRef.current = null;
+                  setDraggedId(null);
+                  setDragOverId(null);
+                  setTimeout(() => {
+                    isDraggingRef.current = false;
+                  }, 150);
+                }}
+                onClick={() => {
+                  if (isDraggingRef.current) return;
+                  setSelectedDetailSchedule(sc);
+                }}
               >
                 <div style={styles.cardHeader}>
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
@@ -1294,34 +1490,44 @@ export default function Schedules() {
                     )}
                   </div>
                   
-                  {userRole === 'admin' && (
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
-                      {sc.status === 'scheduled' && (
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <div 
+                      className="card-drag-handle" 
+                      title="Clique e arraste para mudar a ordem desta escala"
+                    >
+                      <GripVertical size={13} />
+                      <span>Arrastar</span>
+                    </div>
+
+                    {userRole === 'admin' && (
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        {sc.status === 'scheduled' && (
+                          <button 
+                            style={styles.editBtn} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(sc);
+                            }}
+                            title="Editar Escala"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                        )}
                         <button 
-                          style={styles.editBtn} 
+                          style={styles.deleteBtn} 
                           onClick={(e) => {
                             e.stopPropagation();
-                            openEditModal(sc);
+                            if (confirm('Tem certeza que deseja excluir esta escala? Isso apagará também os relatórios associados.')) {
+                              deleteSchedule(sc.id);
+                            }
                           }}
-                          title="Editar Escala"
+                          title="Excluir Escala"
                         >
-                          <Edit3 size={14} />
+                          <Trash2 size={14} />
                         </button>
-                      )}
-                      <button 
-                        style={styles.deleteBtn} 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('Tem certeza que deseja excluir esta escala? Isso apagará também os relatórios associados.')) {
-                            deleteSchedule(sc.id);
-                          }
-                        }}
-                        title="Excluir Escala"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="schedule-card-main-highlight">
@@ -2252,7 +2458,7 @@ export default function Schedules() {
       >
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
-            Selecione as escalas que deseja incluir no documento de compartilhamento. O sistema gerará um arquivo formatado pronto para imprimir ou salvar como PDF.
+            Selecione as escalas que deseja incluir. O PDF seguirá a <strong>ordem exata de seleção</strong> (organizado por dia: 1 página por dia).
           </p>
 
           {upcomingSchedules.length === 0 ? (
@@ -2275,10 +2481,12 @@ export default function Schedules() {
                 </button>
               </div>
 
-              <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem', paddingRight: '0.25rem' }}>
+              <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem', paddingRight: '0.25rem' }}>
                 {upcomingSchedules.map(sc => {
                   const chapel = getChapel(sc.chapelId);
                   const isChecked = selectedShareIds.includes(sc.id);
+                  const selectionOrderIndex = isChecked ? selectedShareIds.indexOf(sc.id) + 1 : null;
+
                   return (
                     <label 
                       key={sc.id} 
@@ -2287,33 +2495,98 @@ export default function Schedules() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.75rem',
-                        padding: '0.75rem',
-                        border: '1px solid var(--border-color)',
+                        padding: '0.75rem 1rem',
+                        border: isChecked ? '1px solid var(--primary-gold)' : '1px solid var(--border-color)',
                         borderRadius: '8px',
                         cursor: 'pointer',
-                        backgroundColor: isChecked ? 'rgba(217, 119, 6, 0.05)' : 'rgba(0,0,0,0.15)',
+                        backgroundColor: isChecked ? 'rgba(217, 119, 6, 0.08)' : 'rgba(0,0,0,0.15)',
                         transition: 'all var(--transition-fast)'
                       }}
                     >
-                      <input 
-                        type="checkbox" 
-                        checked={isChecked}
-                        onChange={() => handleToggleShareSelect(sc.id)}
-                        style={{
-                          width: '18px',
-                          height: '18px',
-                          accentColor: 'var(--primary-gold)',
-                          cursor: 'pointer'
-                        }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: 'var(--color-text-primary)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked}
+                          onChange={() => handleToggleShareSelect(sc.id)}
+                          style={{
+                            width: '18px',
+                            height: '18px',
+                            accentColor: 'var(--primary-gold)',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        {isChecked && (
+                          <span 
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minWidth: '22px',
+                              height: '22px',
+                              padding: '0 4px',
+                              borderRadius: '11px',
+                              backgroundColor: 'var(--primary-gold)',
+                              color: '#000',
+                              fontWeight: 'bold',
+                              fontSize: '0.72rem',
+                              boxShadow: '0 0 6px rgba(217, 119, 6, 0.4)'
+                            }}
+                            title={`Posição ${selectionOrderIndex}º no documento`}
+                          >
+                            {selectionOrderIndex}º
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: '0.88rem', fontWeight: '600', color: 'var(--color-text-primary)' }}>
                           {chapel.name}
                         </span>
                         <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.1rem' }}>
                           📅 {formatDate(sc.date)} • ⏰ {formatTime(sc.time)} {sc.published === false ? '• (Rascunho)' : ''}
                         </span>
                       </div>
+
+                      {isChecked && (
+                        <div 
+                          style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }} 
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            disabled={selectionOrderIndex === 1}
+                            onClick={() => handleMoveShareOrder(sc.id, -1)}
+                            style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: selectionOrderIndex === 1 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-secondary)',
+                              cursor: selectionOrderIndex === 1 ? 'not-allowed' : 'pointer',
+                              padding: '0.2rem 0.45rem',
+                              fontSize: '0.7rem'
+                            }}
+                            title="Mover para cima na ordem do PDF"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            disabled={selectionOrderIndex === selectedShareIds.length}
+                            onClick={() => handleMoveShareOrder(sc.id, 1)}
+                            style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: selectionOrderIndex === selectedShareIds.length ? 'rgba(255,255,255,0.2)' : 'var(--color-text-secondary)',
+                              cursor: selectionOrderIndex === selectedShareIds.length ? 'not-allowed' : 'pointer',
+                              padding: '0.2rem 0.45rem',
+                              fontSize: '0.7rem'
+                            }}
+                            title="Mover para baixo na ordem do PDF"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      )}
                     </label>
                   );
                 })}
@@ -2491,7 +2764,7 @@ const styles = {
     display: 'flex',
     gap: '1rem',
     borderBottom: '1px solid var(--border-color)',
-    marginBottom: '2rem',
+    marginBottom: 0,
     paddingBottom: '0.25rem',
   },
   subTabBtn: {
