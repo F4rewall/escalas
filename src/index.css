@@ -759,7 +759,7 @@ h1, h2, h3, h4, .brand-font {
   display: flex;
   flex-direction: column;
   position: relative;
-  cursor: grab;
+  cursor: pointer;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -780,7 +780,11 @@ h1, h2, h3, h4, .brand-font {
   background: var(--bg-card-hover);
 }
 
-.app-schedule-card:active {
+.app-schedule-card.is-draggable-card {
+  cursor: grab;
+}
+
+.app-schedule-card.is-draggable-card:active {
   cursor: grabbing;
 }
 

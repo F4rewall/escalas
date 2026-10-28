@@ -402,6 +402,7 @@ export default function Schedules() {
   );
 
   const handleReorder = (sourceId, targetId) => {
+    if (userRole !== 'admin') return;
     if (!sourceId || !targetId || sourceId === targetId) return;
     const currentList = [...activeSchedules];
     const sourceIndex = currentList.findIndex(s => s.id === sourceId);
@@ -1360,7 +1361,7 @@ export default function Schedules() {
           </button>
         </div>
 
-        {activeSchedules.length > 1 && (
+        {userRole === 'admin' && activeSchedules.length > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
             <div className="drag-info-pill">
               <GripVertical size={13} style={{ color: 'var(--primary-gold)' }} />
@@ -1397,39 +1398,40 @@ export default function Schedules() {
             const chapel = getChapel(sc.chapelId);
             const isItemDragging = draggedId === sc.id;
             const isItemOver = dragOverId === sc.id;
+            const isAdmin = userRole === 'admin';
 
             return (
               <div 
                 key={sc.id} 
                 data-schedule-id={sc.id}
-                className={`app-schedule-card ${isItemDragging ? 'is-dragging' : ''} ${isItemOver ? 'is-drag-over' : ''}`}
-                draggable={true}
-                onDragStart={(e) => {
+                className={`app-schedule-card ${isAdmin ? 'is-draggable-card' : ''} ${isItemDragging ? 'is-dragging' : ''} ${isItemOver ? 'is-drag-over' : ''}`}
+                draggable={isAdmin}
+                onDragStart={isAdmin ? (e) => {
                   isDraggingRef.current = true;
                   setDraggedId(sc.id);
                   e.dataTransfer.effectAllowed = 'move';
                   e.dataTransfer.setData('text/plain', sc.id);
-                }}
-                onDragOver={(e) => {
+                } : undefined}
+                onDragOver={isAdmin ? (e) => {
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
                   if (dragOverId !== sc.id) {
                     setDragOverId(sc.id);
                   }
-                }}
-                onDragEnter={(e) => {
+                } : undefined}
+                onDragEnter={isAdmin ? (e) => {
                   e.preventDefault();
                   if (draggedId && draggedId !== sc.id) {
                     setDragOverId(sc.id);
                   }
-                }}
-                onDragLeave={(e) => {
+                } : undefined}
+                onDragLeave={isAdmin ? (e) => {
                   if (e.currentTarget.contains(e.relatedTarget)) return;
                   if (dragOverId === sc.id) {
                     setDragOverId(null);
                   }
-                }}
-                onDrop={(e) => {
+                } : undefined}
+                onDrop={isAdmin ? (e) => {
                   e.preventDefault();
                   const sourceId = e.dataTransfer.getData('text/plain') || draggedId;
                   handleReorder(sourceId, sc.id);
@@ -1438,20 +1440,20 @@ export default function Schedules() {
                   setTimeout(() => {
                     isDraggingRef.current = false;
                   }, 150);
-                }}
-                onDragEnd={() => {
+                } : undefined}
+                onDragEnd={isAdmin ? () => {
                   setDraggedId(null);
                   setDragOverId(null);
                   setTimeout(() => {
                     isDraggingRef.current = false;
                   }, 150);
-                }}
-                onTouchStart={(e) => {
+                } : undefined}
+                onTouchStart={isAdmin ? (e) => {
                   if (e.target.closest('button, a, input, select')) return;
                   touchDraggedIdRef.current = sc.id;
                   setDraggedId(sc.id);
-                }}
-                onTouchMove={(e) => {
+                } : undefined}
+                onTouchMove={isAdmin ? (e) => {
                   if (!touchDraggedIdRef.current) return;
                   isDraggingRef.current = true;
                   const touch = e.touches[0];
@@ -1463,8 +1465,8 @@ export default function Schedules() {
                       setDragOverId(overId);
                     }
                   }
-                }}
-                onTouchEnd={() => {
+                } : undefined}
+                onTouchEnd={isAdmin ? () => {
                   if (touchDraggedIdRef.current && dragOverId && touchDraggedIdRef.current !== dragOverId) {
                     handleReorder(touchDraggedIdRef.current, dragOverId);
                   }
@@ -1474,7 +1476,7 @@ export default function Schedules() {
                   setTimeout(() => {
                     isDraggingRef.current = false;
                   }, 150);
-                }}
+                } : undefined}
                 onClick={() => {
                   if (isDraggingRef.current) return;
                   setSelectedDetailSchedule(sc);
@@ -1491,13 +1493,15 @@ export default function Schedules() {
                   </div>
                   
                   <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                    <div 
-                      className="card-drag-handle" 
-                      title="Clique e arraste para mudar a ordem desta escala"
-                    >
-                      <GripVertical size={13} />
-                      <span>Arrastar</span>
-                    </div>
+                    {userRole === 'admin' && (
+                      <div 
+                        className="card-drag-handle" 
+                        title="Clique e arraste para mudar a ordem desta escala"
+                      >
+                        <GripVertical size={13} />
+                        <span>Arrastar</span>
+                      </div>
+                    )}
 
                     {userRole === 'admin' && (
                       <div style={{ display: 'flex', gap: '0.35rem' }}>

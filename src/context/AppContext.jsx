@@ -276,6 +276,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateSchedulesOrder = async (orderedIds, type = 'upcoming') => {
+    if (userRole !== 'admin') return;
     const isUpcoming = type === 'upcoming';
     const orderField = isUpcoming ? 'order' : 'pastOrder';
 
@@ -314,6 +315,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const resetSchedulesOrder = async (type = 'upcoming') => {
+    if (userRole !== 'admin') return;
     const isUpcoming = type === 'upcoming';
     const orderField = isUpcoming ? 'order' : 'pastOrder';
 
