@@ -270,7 +270,9 @@ export default function PublicHome({ setActiveTab }) {
       {/* Hero Banner */}
       <div className="glass-panel hero-card" style={{ marginBottom: '2rem', padding: '2.5rem 2rem' }}>
         <div style={{ maxWidth: '820px' }}>
-          <h1 className="hero-title" style={{ fontSize: '2.1rem' }}>Escalas Paroquiais • Santo Antônio</h1>
+          <h1 className="hero-title" style={{ fontSize: '2.1rem', color: 'var(--gold-light)' }}>
+            Escalas Paroquiais • Santo Antônio
+          </h1>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
             Acompanhe na página principal todas as escalas lançadas pelos setores de <strong>Coroinhas</strong>, <strong>Música</strong> e <strong>Liturgia</strong>, ou acesse cada pastoral diretamente pelo menu superior.
           </p>
