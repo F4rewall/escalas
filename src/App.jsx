@@ -46,7 +46,7 @@ function AppContent() {
   }
 
   const renderActivePage = () => {
-    const publicAllowedTabs = ['principal', 'schedules-coroinhas', 'schedules-musica', 'schedules-liturgia', 'admin-login'];
+    const publicAllowedTabs = ['principal', 'schedules-coroinhas', 'schedules-musica', 'schedules-liturgia', 'schedules-mece', 'admin-login'];
     const currentTab = (!isAdmin && !publicAllowedTabs.includes(activeTab)) ? 'principal' : activeTab;
 
     switch (currentTab) {
@@ -58,6 +58,8 @@ function AppContent() {
         return <Schedules sector="musica" />;
       case 'schedules-liturgia':
         return <Schedules sector="liturgia" />;
+      case 'schedules-mece':
+        return <Schedules sector="mece" />;
       case 'dashboard':
         return <Dashboard setActiveTab={setActiveTab} />;
       case 'schedules':

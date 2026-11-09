@@ -106,6 +106,42 @@ export const SECTORS = {
     auxEligibleCategories: ['salmista', 'comentarista', 'coordenador'],
     memberEligibleCategories: ['leitor'],
     emptySelectionAlert: 'Selecione pelo menos um membro da liturgia (coordenador, comentarista, salmista ou leitor).'
+  },
+  mece: {
+    id: 'mece',
+    name: 'MECE',
+    fullName: 'Ministros Extraordinários da Sagrada Comunhão',
+    scheduleTitle: 'Escalas dos MECE',
+    scheduleSubtitle: 'Acompanhe ou organize os Ministros Extraordinários da Sagrada Comunhão nas celebrações.',
+    profilesTitle: 'Perfis dos Ministros (MECE)',
+    profilesSubtitle: 'Lista completa de Ministros Extraordinários da Sagrada Comunhão e Coordenadores. Clique em um perfil para ver a frequência.',
+    memberSingular: 'Ministro',
+    memberPlural: 'Ministros',
+    adminBadge: 'Admin • MECE',
+    accentColor: '#f43f5e',
+    secondaryColor: '#eab308',
+    pdfHeaderSubtitle: 'ESCALA DOS MINISTROS EXTRAORDINÁRIOS DA SAGRADA COMUNHÃO • MECE',
+    pdfFooter: 'Paróquia Santo Antônio de Lisboa • Arquidiocese de Palmas • Pastoral dos MECE',
+    mainRoleLabel: 'Ministro Coordenador da Celebração',
+    mainRoleSelectPlaceholder: 'Selecione o Ministro Coordenador...',
+    mainRoleShortLabel: 'Coordenador / Auxiliares',
+    mainRoleBadge: 'MC',
+    mainRoleTitle: 'Ministro Coordenador',
+    auxRoleSectionTitle: 'Selecionar Ministros Auxiliares (Purificação / Âmbula)',
+    auxRoleLabel: 'Ministros Auxiliares',
+    auxRoleBadge: 'MA',
+    memberRoleSectionTitle: 'Selecionar Ministros da Eucaristia (MECE)',
+    memberRoleLabel: 'Ministros (MECE)',
+    memberRoleBadge: 'ME',
+    categories: [
+      { id: 'ministro', label: 'Ministro(a) (MECE)', plural: 'Ministros (MECE)', badgeClass: 'badge-mece-ministro', shortBadge: 'ME', color: '#f43f5e' },
+      { id: 'ministro_auxiliar', label: 'Ministro Auxiliar', plural: 'Ministros Auxiliares', badgeClass: 'badge-mece-aux', shortBadge: 'MA', color: '#a855f7' },
+      { id: 'coordenador_mece', label: 'Coordenador(a) MECE', plural: 'Coordenadores MECE', badgeClass: 'badge-cerimoniario', shortBadge: 'MC', color: '#eab308' }
+    ],
+    mainEligibleCategories: ['coordenador_mece', 'ministro_auxiliar', 'ministro'],
+    auxEligibleCategories: ['ministro_auxiliar', 'coordenador_mece'],
+    memberEligibleCategories: ['ministro'],
+    emptySelectionAlert: 'Selecione pelo menos um ministro (coordenador, auxiliar ou MECE).'
   }
 };
 

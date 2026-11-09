@@ -9,6 +9,7 @@ import {
   Church,
   Music,
   BookOpen,
+  HeartHandshake,
   ArrowRight,
   AlertTriangle,
   CalendarDays
@@ -87,6 +88,7 @@ export default function PublicHome({ setActiveTab }) {
   const coroinhasSchedules = getSectorSchedules('coroinhas');
   const musicaSchedules = getSectorSchedules('musica');
   const liturgiaSchedules = getSectorSchedules('liturgia');
+  const meceSchedules = getSectorSchedules('mece');
 
   const sectorCards = [
     {
@@ -121,6 +123,17 @@ export default function PublicHome({ setActiveTab }) {
       bgTint: 'rgba(16, 185, 129, 0.12)',
       borderTint: 'rgba(16, 185, 129, 0.35)',
       schedules: liturgiaSchedules
+    },
+    {
+      id: 'mece',
+      tabId: 'schedules-mece',
+      title: 'Escala dos MECE',
+      subtitle: 'Ministros Extraordinários da Sagrada Comunhão',
+      icon: HeartHandshake,
+      color: '#f43f5e',
+      bgTint: 'rgba(244, 63, 94, 0.12)',
+      borderTint: 'rgba(244, 63, 94, 0.35)',
+      schedules: meceSchedules
     }
   ];
 
@@ -274,7 +287,7 @@ export default function PublicHome({ setActiveTab }) {
             Escalas Paroquiais • Santo Antônio
           </h1>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
-            Acompanhe na página principal todas as escalas lançadas pelos setores de <strong>Coroinhas</strong>, <strong>Música</strong> e <strong>Liturgia</strong>, ou acesse cada pastoral diretamente pelo menu superior.
+            Acompanhe na página principal todas as escalas lançadas pelos setores de <strong>Coroinhas</strong>, <strong>Música</strong>, <strong>Liturgia</strong> e <strong>MECE</strong>, ou acesse cada pastoral diretamente pelo menu superior.
           </p>
         </div>
       </div>

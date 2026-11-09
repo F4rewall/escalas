@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ShieldAlert, KeyRound, Lock, ArrowRight, Church, Music, BookOpen } from 'lucide-react';
+import { ShieldAlert, KeyRound, Lock, ArrowRight, Church, Music, BookOpen, HeartHandshake } from 'lucide-react';
 
 export default function AdminLogin({ setActiveTab }) {
   const { loginAsAdmin } = useContext(AppContext);
@@ -15,7 +15,7 @@ export default function AdminLogin({ setActiveTab }) {
     if (sector) {
       setActiveTab('dashboard'); // Redirect to sector dashboard after login
     } else {
-      setError('Senha incorreta. Digite a senha do seu setor (Coroinhas, Música ou Liturgia).');
+      setError('Senha incorreta. Digite a senha do seu setor (Coroinhas, Música, Liturgia ou MECE).');
       setPassword('');
     }
   };
@@ -41,6 +41,9 @@ export default function AdminLogin({ setActiveTab }) {
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '999px', backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#34d399', fontWeight: 600 }}>
             <BookOpen size={12} /> Liturgia
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '999px', backgroundColor: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fb7185', fontWeight: 600 }}>
+            <HeartHandshake size={12} /> MECE
           </span>
         </div>
 

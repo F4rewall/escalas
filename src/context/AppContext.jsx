@@ -134,6 +134,11 @@ export const AppProvider = ({ children }) => {
       setAdminSector('liturgia');
       return 'liturgia';
     }
+    if (cleanPass === 'mece123') {
+      setUserRole('admin');
+      setAdminSector('mece');
+      return 'mece';
+    }
     return false;
   };
 

@@ -14,7 +14,8 @@ import {
   LogOut,
   Home,
   Music,
-  BookOpen
+  BookOpen,
+  HeartHandshake
 } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab }) {
@@ -41,7 +42,8 @@ export default function Navbar({ activeTab, setActiveTab }) {
       { id: 'principal', label: 'Página Principal', icon: Home },
       { id: 'schedules-coroinhas', label: 'Coroinhas', icon: Church },
       { id: 'schedules-musica', label: 'Música', icon: Music },
-      { id: 'schedules-liturgia', label: 'Liturgia', icon: BookOpen }
+      { id: 'schedules-liturgia', label: 'Liturgia', icon: BookOpen },
+      { id: 'schedules-mece', label: 'MECE', icon: HeartHandshake }
     );
   }
 
