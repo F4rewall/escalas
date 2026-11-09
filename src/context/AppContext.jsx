@@ -16,6 +16,10 @@ export const AppProvider = ({ children }) => {
     return localStorage.getItem('eh_user_role') || 'public';
   });
 
+  const [adminSector, setAdminSector] = useState(() => {
+    return localStorage.getItem('eh_admin_sector') || 'coroinhas';
+  });
+
   const [chapels, setChapels] = useState([]);
   const [servers, setServers] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -23,10 +27,14 @@ export const AppProvider = ({ children }) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Sync userRole to localStorage
+  // Sync userRole & adminSector to localStorage
   useEffect(() => {
     localStorage.setItem('eh_user_role', userRole);
   }, [userRole]);
+
+  useEffect(() => {
+    localStorage.setItem('eh_admin_sector', adminSector);
+  }, [adminSector]);
 
   // Realtime synchronization from Firestore
   useEffect(() => {
@@ -110,9 +118,21 @@ export const AppProvider = ({ children }) => {
 
   // Auth Operations
   const loginAsAdmin = (password) => {
-    if (password === 'admin123') {
+    const cleanPass = (password || '').trim();
+    if (cleanPass === 'admin123') {
       setUserRole('admin');
-      return true;
+      setAdminSector('coroinhas');
+      return 'coroinhas';
+    }
+    if (cleanPass === 'musica123') {
+      setUserRole('admin');
+      setAdminSector('musica');
+      return 'musica';
+    }
+    if (cleanPass === 'liturgia123') {
+      setUserRole('admin');
+      setAdminSector('liturgia');
+      return 'liturgia';
     }
     return false;
   };
@@ -121,15 +141,28 @@ export const AppProvider = ({ children }) => {
     setUserRole('public');
   };
 
+  // Helper to strip undefined fields before saving to Firestore
+  const sanitizeForFirestore = (obj) => {
+    const clean = {};
+    Object.keys(obj).forEach((key) => {
+      if (obj[key] !== undefined) {
+        clean[key] = obj[key];
+      }
+    });
+    return clean;
+  };
+
   // --- Servers Actions ---
   const addServer = async (server) => {
     const id = 's_' + Date.now();
-    const newServer = {
+    const newServer = sanitizeForFirestore({
       ...server,
       id,
+      sector: server.sector || adminSector || 'coroinhas',
       joinedDate: new Date().toISOString().split('T')[0],
       color: server.color || ['#3b82f6', '#ec4899', '#eab308', '#10b981', '#8b5cf6', '#f97316', '#14b8a6', '#6366f1'][Math.floor(Math.random() * 8)]
-    };
+    });
+    setServers((prev) => [...prev.filter(s => s.id !== id), newServer].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
     try {
       await setDoc(doc(db, "servers", id), newServer);
     } catch (e) {
@@ -138,14 +171,21 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateServer = async (updatedServer) => {
+    const cleanServer = sanitizeForFirestore({
+      ...updatedServer,
+      sector: updatedServer.sector || adminSector || 'coroinhas',
+      color: updatedServer.color || '#3b82f6'
+    });
+    setServers((prev) => prev.map(s => s.id === cleanServer.id ? cleanServer : s).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
     try {
-      await setDoc(doc(db, "servers", updatedServer.id), updatedServer);
+      await setDoc(doc(db, "servers", cleanServer.id), cleanServer);
     } catch (e) {
       console.error("Error updating server:", e);
     }
   };
 
   const deleteServer = async (id) => {
+    setServers((prev) => prev.filter(s => s.id !== id));
     try {
       // 1. Delete server document
       await deleteDoc(doc(db, "servers", id));
@@ -188,11 +228,12 @@ export const AppProvider = ({ children }) => {
   // --- Chapels Actions ---
   const addChapel = async (chapel) => {
     const id = 'c_' + Date.now();
-    const newChapel = {
+    const newChapel = sanitizeForFirestore({
       ...chapel,
       id,
       massTimes: chapel.massTimes || []
-    };
+    });
+    setChapels((prev) => [...prev.filter(c => c.id !== id), newChapel].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
     try {
       await setDoc(doc(db, "chapels", id), newChapel);
     } catch (e) {
@@ -201,14 +242,17 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateChapel = async (updatedChapel) => {
+    const cleanChapel = sanitizeForFirestore(updatedChapel);
+    setChapels((prev) => prev.map(c => c.id === cleanChapel.id ? cleanChapel : c).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
     try {
-      await setDoc(doc(db, "chapels", updatedChapel.id), updatedChapel);
+      await setDoc(doc(db, "chapels", cleanChapel.id), cleanChapel);
     } catch (e) {
       console.error("Error updating chapel:", e);
     }
   };
 
   const deleteChapel = async (id) => {
+    setChapels((prev) => prev.filter(c => c.id !== id));
     try {
       // 1. Delete chapel
       await deleteDoc(doc(db, "chapels", id));
@@ -229,14 +273,20 @@ export const AppProvider = ({ children }) => {
   // --- Schedules Actions ---
   const addSchedule = async (schedule) => {
     const id = 'sc_' + Date.now();
-    const newSchedule = {
+    const newSchedule = sanitizeForFirestore({
       ...schedule,
       id,
+      sector: schedule.sector || adminSector || 'coroinhas',
+      serverIds: schedule.serverIds || [],
+      ceremonialistIds: schedule.ceremonialistIds || [],
+      mainCeremonialistId: schedule.mainCeremonialistId || '',
+      observation: schedule.observation || '',
       status: 'scheduled',
       published: false,
       reportSubmitted: false,
       code: String(Math.floor(1000 + Math.random() * 9000))
-    };
+    });
+    setSchedules((prev) => [...prev.filter(sc => sc.id !== id), newSchedule]);
     try {
       await setDoc(doc(db, "schedules", id), newSchedule);
     } catch (e) {
@@ -245,14 +295,23 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateSchedule = async (updatedSchedule) => {
+    const cleanSchedule = sanitizeForFirestore({
+      ...updatedSchedule,
+      sector: updatedSchedule.sector || adminSector || 'coroinhas',
+      serverIds: updatedSchedule.serverIds || [],
+      ceremonialistIds: updatedSchedule.ceremonialistIds || [],
+      mainCeremonialistId: updatedSchedule.mainCeremonialistId || ''
+    });
+    setSchedules((prev) => prev.map(sc => sc.id === cleanSchedule.id ? cleanSchedule : sc));
     try {
-      await setDoc(doc(db, "schedules", updatedSchedule.id), updatedSchedule);
+      await setDoc(doc(db, "schedules", cleanSchedule.id), cleanSchedule);
     } catch (e) {
       console.error("Error updating schedule:", e);
     }
   };
 
   const deleteSchedule = async (id) => {
+    setSchedules((prev) => prev.filter(sc => sc.id !== id));
     try {
       // 1. Delete schedule
       await deleteDoc(doc(db, "schedules", id));
@@ -314,7 +373,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const resetSchedulesOrder = async (type = 'upcoming') => {
+  const resetSchedulesOrder = async (type = 'upcoming', targetSector = adminSector) => {
     if (userRole !== 'admin') return;
     const isUpcoming = type === 'upcoming';
     const orderField = isUpcoming ? 'order' : 'pastOrder';
@@ -326,12 +385,16 @@ export const AppProvider = ({ children }) => {
     }
 
     const targetSchedules = schedules.filter((s) =>
-      isUpcoming ? s.status === 'scheduled' : s.status === 'completed'
+      ((s.sector || 'coroinhas') === targetSector) &&
+      (isUpcoming ? s.status === 'scheduled' : s.status === 'completed')
     );
 
     setSchedules((prev) =>
       prev.map((s) => {
-        if ((isUpcoming && s.status === 'scheduled') || (!isUpcoming && s.status === 'completed')) {
+        if (
+          ((s.sector || 'coroinhas') === targetSector) &&
+          ((isUpcoming && s.status === 'scheduled') || (!isUpcoming && s.status === 'completed'))
+        ) {
           const copy = { ...s };
           delete copy[orderField];
           return copy;
@@ -359,6 +422,9 @@ export const AppProvider = ({ children }) => {
     try {
       const batch = writeBatch(db);
 
+      const scheduleObj = schedules.find((sc) => sc.id === scheduleId);
+      const scheduleSector = scheduleObj?.sector || 'coroinhas';
+
       // 1. Save attendance records
       // First delete any existing attendance for this schedule to avoid duplicates
       attendance.forEach((att) => {
@@ -371,12 +437,12 @@ export const AppProvider = ({ children }) => {
         const attId = 'att_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         batch.set(doc(db, "attendance", attId), {
           id: attId,
+          sector: scheduleSector,
           ...record
         });
       });
 
       // 2. Add coordinator report
-      const scheduleObj = schedules.find((sc) => sc.id === scheduleId);
       const date = scheduleObj ? scheduleObj.date : new Date().toISOString().split('T')[0];
       
       const presentCount = attendanceRecords.filter((r) => r.status === 'present').length;
@@ -388,6 +454,7 @@ export const AppProvider = ({ children }) => {
       const newReport = {
         id: repId,
         scheduleId,
+        sector: scheduleSector,
         date,
         attendanceSummary,
         coordinatorName: reportData.confirmacao || 'Coordenador',
@@ -420,17 +487,25 @@ export const AppProvider = ({ children }) => {
     return { present, absent, justified, total, rate };
   };
 
-  const clearAllData = async () => {
+  const clearAllData = async (targetSector = adminSector) => {
     try {
       const batch = writeBatch(db);
-      chapels.forEach((c) => batch.delete(doc(db, "chapels", c.id)));
-      servers.forEach((s) => batch.delete(doc(db, "servers", s.id)));
-      schedules.forEach((sc) => batch.delete(doc(db, "schedules", sc.id)));
-      attendance.forEach((att) => batch.delete(doc(db, "attendance", att.id)));
-      reports.forEach((rep) => batch.delete(doc(db, "reports", rep.id)));
+      const sectorSchedules = schedules.filter((sc) => (sc.sector || 'coroinhas') === targetSector);
+      const sectorScheduleIds = new Set(sectorSchedules.map((sc) => sc.id));
+
+      servers
+        .filter((s) => (s.sector || 'coroinhas') === targetSector)
+        .forEach((s) => batch.delete(doc(db, "servers", s.id)));
+      sectorSchedules.forEach((sc) => batch.delete(doc(db, "schedules", sc.id)));
+      attendance
+        .filter((att) => sectorScheduleIds.has(att.scheduleId) || (att.sector && att.sector === targetSector))
+        .forEach((att) => batch.delete(doc(db, "attendance", att.id)));
+      reports
+        .filter((rep) => sectorScheduleIds.has(rep.scheduleId) || (rep.sector && rep.sector === targetSector))
+        .forEach((rep) => batch.delete(doc(db, "reports", rep.id)));
       await batch.commit();
     } catch (e) {
-      console.error("Error clearing all data:", e);
+      console.error("Error clearing sector data:", e);
     }
   };
 
@@ -438,6 +513,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider
       value={{
         userRole,
+        adminSector,
         loginAsAdmin,
         logoutAdmin,
         chapels,

@@ -3,6 +3,7 @@ import { AppProvider, AppContext } from './context/AppContext';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import Schedules from './pages/Schedules';
+import PublicHome from './pages/PublicHome';
 import Profiles from './pages/Profiles';
 import Chapels from './pages/Chapels';
 import Reports from './pages/Reports';
@@ -10,11 +11,11 @@ import AdminLogin from './pages/AdminLogin';
 import './App.css';
 
 function AppContent() {
-  const { userRole, loading } = useContext(AppContext);
+  const { userRole, adminSector, loading } = useContext(AppContext);
   const isAdmin = userRole === 'admin';
 
   const [activeTab, setActiveTab] = useState(() => {
-    return userRole === 'admin' ? 'dashboard' : 'schedules';
+    return userRole === 'admin' ? 'dashboard' : 'principal';
   });
 
   // Keep activeTab in sync with role changes (e.g. login/logout)
@@ -22,9 +23,9 @@ function AppContent() {
     if (userRole === 'admin') {
       setActiveTab('dashboard');
     } else {
-      setActiveTab('schedules');
+      setActiveTab('principal');
     }
-  }, [userRole]);
+  }, [userRole, adminSector]);
 
   if (loading) {
     return (
@@ -45,14 +46,22 @@ function AppContent() {
   }
 
   const renderActivePage = () => {
-    // Route guard: if the user is not admin and is trying to access restricted tabs, fallback to schedules
-    const currentTab = (!isAdmin && activeTab !== 'admin-login') ? 'schedules' : activeTab;
+    const publicAllowedTabs = ['principal', 'schedules-coroinhas', 'schedules-musica', 'schedules-liturgia', 'admin-login'];
+    const currentTab = (!isAdmin && !publicAllowedTabs.includes(activeTab)) ? 'principal' : activeTab;
 
     switch (currentTab) {
+      case 'principal':
+        return <PublicHome setActiveTab={setActiveTab} />;
+      case 'schedules-coroinhas':
+        return <Schedules sector="coroinhas" />;
+      case 'schedules-musica':
+        return <Schedules sector="musica" />;
+      case 'schedules-liturgia':
+        return <Schedules sector="liturgia" />;
       case 'dashboard':
         return <Dashboard setActiveTab={setActiveTab} />;
       case 'schedules':
-        return <Schedules />;
+        return <Schedules sector={adminSector} />;
       case 'profiles':
         return <Profiles />;
       case 'chapels':
@@ -62,7 +71,7 @@ function AppContent() {
       case 'admin-login':
         return <AdminLogin setActiveTab={setActiveTab} />;
       default:
-        return <Schedules />;
+        return <PublicHome setActiveTab={setActiveTab} />;
     }
   };
 

@@ -1,5 +1,6 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
+import { getSectorConfig, getItemSector } from '../utils/sectorConfig';
 import Modal from '../components/Modal';
 import { 
   Plus, 
@@ -247,12 +248,13 @@ const CalendarPicker = ({ selectedDate, onSelectDate }) => {
   );
 };
 
-export default function Schedules() {
+export default function Schedules({ sector }) {
   const { 
     userRole, 
-    schedules, 
+    adminSector,
+    schedules: allSchedules, 
     chapels, 
-    servers, 
+    servers: allServers, 
     addSchedule, 
     updateSchedule,
     deleteSchedule, 
@@ -263,9 +265,22 @@ export default function Schedules() {
     reports
   } = useContext(AppContext);
 
+  const activeSector = sector || (userRole === 'admin' ? adminSector : 'coroinhas');
+  const sectorCfg = getSectorConfig(activeSector);
+  const isSectorAdmin = userRole === 'admin' && adminSector === activeSector;
+
+  // Filter schedules and servers strictly to the active sector
+  const schedules = allSchedules.filter(sc => getItemSector(sc) === activeSector);
+  const servers = allServers.filter(sv => getItemSector(sv) === activeSector);
+
   // States
   const [activeSubTab, setActiveSubTab] = useState('upcoming'); // 'upcoming' | 'past'
   const [selectedDetailSchedule, setSelectedDetailSchedule] = useState(null);
+
+  useEffect(() => {
+    setSelectedDetailSchedule(null);
+    setActiveSubTab('upcoming');
+  }, [activeSector]);
   
   // Create Schedule Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -373,7 +388,7 @@ export default function Schedules() {
 
   // 1. Group/Filter schedules with safe sorting and manual custom order
   const upcomingSchedules = schedules
-    .filter(s => s.status === 'scheduled' && (userRole === 'admin' || s.published !== false))
+    .filter(s => s.status === 'scheduled' && (isSectorAdmin || s.published !== false))
     .sort((a, b) => {
       const hasOrderA = typeof a.order === 'number';
       const hasOrderB = typeof b.order === 'number';
@@ -384,7 +399,7 @@ export default function Schedules() {
     });
 
   const pastSchedules = schedules
-    .filter(s => s.status === 'completed' && (userRole === 'admin' || s.published !== false))
+    .filter(s => s.status === 'completed' && (isSectorAdmin || s.published !== false))
     .sort((a, b) => {
       const hasOrderA = typeof a.pastOrder === 'number';
       const hasOrderB = typeof b.pastOrder === 'number';
@@ -402,7 +417,7 @@ export default function Schedules() {
   );
 
   const handleReorder = (sourceId, targetId) => {
-    if (userRole !== 'admin') return;
+    if (!isSectorAdmin) return;
     if (!sourceId || !targetId || sourceId === targetId) return;
     const currentList = [...activeSchedules];
     const sourceIndex = currentList.findIndex(s => s.id === sourceId);
@@ -564,11 +579,12 @@ export default function Schedules() {
     }
 
     if (selectedServerIds.length === 0 && !selectedCeremonialistId && selectedAuxCeremonialistIds.length === 0) {
-      alert('Selecione pelo menos um coroinha ou um cerimoniário.');
+      alert(sectorCfg.emptySelectionAlert);
       return;
     }
 
     const scheduleData = {
+      sector: activeSector,
       chapelId: selectedChapelId,
       date: scheduleDate,
       time: scheduleTime,
@@ -1216,7 +1232,7 @@ export default function Schedules() {
                           <h1 class="header-title">${dateTitle}</h1>
                           <div class="header-subtitle-container">
                             <span class="header-subtitle-line"></span>
-                            <span class="header-subtitle">ESCALA GERAL DE CELEBRAÇÕES</span>
+                            <span class="header-subtitle">${activeSector === 'coroinhas' ? 'ESCALA GERAL DE CELEBRAÇÕES' : sectorCfg.pdfHeaderSubtitle}</span>
                             <span class="header-subtitle-line"></span>
                           </div>
                         </div>
@@ -1265,7 +1281,7 @@ export default function Schedules() {
                               <div class="team-section">
                                 ${ceremonialists.length > 0 ? `
                                   <div class="team-row">
-                                    <div class="role-label">Cerimoniários:</div>
+                                    <div class="role-label">${sectorCfg.mainRoleShortLabel}:</div>
                                     <div class="role-values">
                                       ${ceremonialists.map(name => `<div class="name-item">${getRobeIcon('#1e293b')} ${name}</div>`).join('')}
                                     </div>
@@ -1273,7 +1289,7 @@ export default function Schedules() {
                                 ` : ''}
                                 ${altarServers.length > 0 ? `
                                   <div class="team-row">
-                                    <div class="role-label">Coroinhas:</div>
+                                    <div class="role-label">${sectorCfg.memberRoleLabel}:</div>
                                     <div class="role-values">
                                       ${altarServers.map(name => `<div class="name-item">${getRobeIcon('#dc2626')} ${name}</div>`).join('')}
                                     </div>
@@ -1281,7 +1297,7 @@ export default function Schedules() {
                                 ` : ''}
                                 ${ceremonialists.length === 0 && altarServers.length === 0 ? `
                                   <div class="team-row">
-                                    <div class="role-values" style="font-style: italic; color: #94a3b8; font-size: 0.95rem;">Nenhum servidor escalado.</div>
+                                    <div class="role-values" style="font-style: italic; color: #94a3b8; font-size: 0.95rem;">Nenhum membro escalado.</div>
                                   </div>
                                 ` : ''}
                               </div>
@@ -1292,7 +1308,7 @@ export default function Schedules() {
                     </div>
 
                     <div class="footer">
-                      Paróquia Santo Antônio de Lisboa • Arquidiocese de Palmas • Escala de Servidores do Altar
+                      ${sectorCfg.pdfFooter}
                     </div>
                   </div>
                 </div>
@@ -1316,19 +1332,19 @@ export default function Schedules() {
     <div>
       <div className="section-header">
         <div>
-          <h2 className="section-title">Escalas de Altar</h2>
+          <h2 className="section-title">{sectorCfg.scheduleTitle}</h2>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-            Acompanhe ou organize a distribuição dos servidores nas missas.
+            {sectorCfg.scheduleSubtitle}
           </p>
         </div>
         
-        {userRole === 'admin' ? (
+        {isSectorAdmin ? (
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" onClick={() => setIsShareModalOpen(true)}>
               <Share2 size={16} /> Compartilhar Escalas
             </button>
             <button className="btn btn-primary" onClick={openCreateModal}>
-              <Plus size={16} /> Montar Escala
+              <Plus size={16} /> Montar Escala ({sectorCfg.name})
             </button>
           </div>
         ) : (
@@ -1361,7 +1377,7 @@ export default function Schedules() {
           </button>
         </div>
 
-        {userRole === 'admin' && activeSchedules.length > 1 && (
+        {isSectorAdmin && activeSchedules.length > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
             <div className="drag-info-pill">
               <GripVertical size={13} style={{ color: 'var(--primary-gold)' }} />
@@ -1371,7 +1387,7 @@ export default function Schedules() {
               <button 
                 type="button"
                 className="btn-reset-order"
-                onClick={() => resetSchedulesOrder(activeSubTab)}
+                onClick={() => resetSchedulesOrder(activeSubTab, activeSector)}
                 title="Restaurar a ordem cronológica por data"
               >
                 <RotateCcw size={12} /> Ordem por Data
@@ -1398,7 +1414,7 @@ export default function Schedules() {
             const chapel = getChapel(sc.chapelId);
             const isItemDragging = draggedId === sc.id;
             const isItemOver = dragOverId === sc.id;
-            const isAdmin = userRole === 'admin';
+            const isAdmin = isSectorAdmin;
 
             return (
               <div 
@@ -1487,13 +1503,13 @@ export default function Schedules() {
                     <span className={`badge ${sc.status === 'completed' ? 'badge-present' : 'badge-scheduled'}`}>
                       {sc.status === 'completed' ? 'Concluída' : 'Agendada'}
                     </span>
-                    {userRole === 'admin' && sc.published === false && (
+                    {isSectorAdmin && sc.published === false && (
                       <span className="badge badge-justified">Rascunho</span>
                     )}
                   </div>
                   
                   <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                    {userRole === 'admin' && (
+                    {isSectorAdmin && (
                       <div 
                         className="card-drag-handle" 
                         title="Clique e arraste para mudar a ordem desta escala"
@@ -1503,7 +1519,7 @@ export default function Schedules() {
                       </div>
                     )}
 
-                    {userRole === 'admin' && (
+                    {isSectorAdmin && (
                       <div style={{ display: 'flex', gap: '0.35rem' }}>
                         {sc.status === 'scheduled' && (
                           <button 
@@ -1577,7 +1593,7 @@ export default function Schedules() {
                     <MapPin size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                     <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{chapel.address}</span>
                   </div>
-                  {userRole === 'admin' && sc.status === 'scheduled' && (
+                  {isSectorAdmin && sc.status === 'scheduled' && (
                     <div style={styles.infoRow}>
                       <KeyRound size={14} style={{ color: 'var(--primary-gold)' }} />
                       <span style={{ color: 'var(--color-text-primary)' }}>Código Relatório: <strong style={{ color: 'var(--primary-gold)' }}>{sc.code}</strong></span>
@@ -1598,8 +1614,8 @@ export default function Schedules() {
                     return (
                       <div key={sc.mainCeremonialistId} style={styles.serverRow}>
                         <div style={styles.serverDetails}>
-                          <span style={styles.serverCategoryBadge('cerimoniario')}>CP</span>
-                          <span style={styles.serverName}><strong>{server.name}</strong> <span style={{ fontSize: '0.75rem', color: 'var(--primary-gold)' }}>(Principal)</span></span>
+                          <span style={styles.serverCategoryBadge('cerimoniario')}>{sectorCfg.mainRoleBadge}</span>
+                          <span style={styles.serverName}><strong>{server.name}</strong> <span style={{ fontSize: '0.75rem', color: 'var(--primary-gold)' }}>({activeSector === 'coroinhas' ? 'Principal' : sectorCfg.mainRoleTitle})</span></span>
                         </div>
                         {attendanceStatus && (
                           <span className={`badge ${attendanceStatus.class}`} style={styles.statusBadgeInline}>
@@ -1610,14 +1626,14 @@ export default function Schedules() {
                     );
                   })()}
 
-                  {/* Ceremonialists (Cerimoniários) */}
+                  {/* Ceremonialists / Aux */}
                   {sc.ceremonialistIds && sc.ceremonialistIds.map(id => {
                     const server = getServer(id);
                     const attendanceStatus = sc.status === 'completed' ? getPastServerAttendance(sc.id, id) : null;
                     return (
                       <div key={id} style={styles.serverRow}>
                         <div style={styles.serverDetails}>
-                          <span style={styles.serverCategoryBadge(server.category)}>C</span>
+                          <span style={styles.serverCategoryBadge(server.category)}>{sectorCfg.auxRoleBadge}</span>
                           <span style={styles.serverName}>{server.name}</span>
                         </div>
                         {attendanceStatus && (
@@ -1629,14 +1645,14 @@ export default function Schedules() {
                     );
                   })}
 
-                  {/* Altar Servers (Coroinhas) */}
+                  {/* Altar Servers / Regular Members */}
                   {sc.serverIds.map(id => {
                     const server = getServer(id);
                     const attendanceStatus = sc.status === 'completed' ? getPastServerAttendance(sc.id, id) : null;
                     return (
                       <div key={id} style={styles.serverRow}>
                         <div style={styles.serverDetails}>
-                          <span style={styles.serverCategoryBadge(server.category)}>Co</span>
+                          <span style={styles.serverCategoryBadge(server.category)}>{sectorCfg.memberRoleBadge}</span>
                           <span style={styles.serverName}>{server.name}</span>
                         </div>
                         {attendanceStatus && (
@@ -1650,7 +1666,7 @@ export default function Schedules() {
 
                   {!sc.mainCeremonialistId && sc.serverIds.length === 0 && sc.ceremonialistIds.length === 0 && (
                     <div style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontStyle: 'italic' }}>
-                      Nenhum servidor escalado.
+                      Nenhum membro escalado.
                     </div>
                   )}
                 </div>
@@ -1663,7 +1679,7 @@ export default function Schedules() {
                 )}
 
                 {/* Admin Quick Actions */}
-                {userRole === 'admin' && sc.status === 'scheduled' && (
+                {isSectorAdmin && sc.status === 'scheduled' && (
                   <div style={{ display: 'flex', gap: '0.5rem', width: '100%', marginTop: '1rem', flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
                     {sc.published === false && (
                       <button 
@@ -1720,7 +1736,7 @@ export default function Schedules() {
       <Modal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
-        title={editingSchedule ? "Editar Escala" : "Montar Nova Escala"}
+        title={editingSchedule ? `Editar Escala (${sectorCfg.name})` : `Montar Nova Escala (${sectorCfg.name})`}
       >
         <form onSubmit={handleCreateScheduleSubmit}>
           <div className="form-group">
@@ -1794,34 +1810,34 @@ export default function Schedules() {
             </div>
           )}
 
-          {/* Select Ceremonialist Dropdown */}
+          {/* Select Main Role Dropdown */}
           <div className="form-group" style={{ marginTop: '1.5rem' }}>
-            <label>Cerimoniário Principal (Coordenador do Altar)</label>
+            <label>{sectorCfg.mainRoleLabel}</label>
             <select
               className="form-control"
               value={selectedCeremonialistId}
               onChange={(e) => setSelectedCeremonialistId(e.target.value)}
             >
-              <option value="">Selecione o Cerimoniário Principal...</option>
+              <option value="">{sectorCfg.mainRoleSelectPlaceholder}</option>
               {servers
-                .filter(s => s.active && s.category === 'cerimoniario')
+                .filter(s => s.active && sectorCfg.mainEligibleCategories.includes(s.category))
                 .map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
             </select>
-            {servers.filter(s => s.active && s.category === 'cerimoniario').length === 0 && (
+            {servers.filter(s => s.active && sectorCfg.mainEligibleCategories.includes(s.category)).length === 0 && (
               <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                Nenhum cerimoniário ativo cadastrado.
+                Nenhum {sectorCfg.mainRoleTitle.toLowerCase()} ativo cadastrado neste setor.
               </span>
             )}
           </div>
 
-          {/* Select Auxiliary Ceremonialists Chips */}
+          {/* Select Auxiliary Role Chips */}
           <div style={styles.modalSelectorSection}>
-            <h4 style={styles.selectorSectionTitle}>Selecionar Outros Cerimoniários (Auxiliares)</h4>
+            <h4 style={styles.selectorSectionTitle}>{sectorCfg.auxRoleSectionTitle}</h4>
             <div style={styles.selectChipsContainer}>
               {servers
-                .filter(s => s.active && s.category === 'cerimoniario' && s.id !== selectedCeremonialistId)
+                .filter(s => s.active && sectorCfg.auxEligibleCategories.includes(s.category) && s.id !== selectedCeremonialistId)
                 .map(s => {
                   const isSelected = selectedAuxCeremonialistIds.includes(s.id);
                   return (
@@ -1838,18 +1854,18 @@ export default function Schedules() {
                     </button>
                   );
                 })}
-              {servers.filter(s => s.active && s.category === 'cerimoniario' && s.id !== selectedCeremonialistId).length === 0 && (
-                <p style={styles.noServersMsg}>Nenhum outro cerimoniário ativo cadastrado.</p>
+              {servers.filter(s => s.active && sectorCfg.auxEligibleCategories.includes(s.category) && s.id !== selectedCeremonialistId).length === 0 && (
+                <p style={styles.noServersMsg}>Nenhum membro ativo cadastrado para {sectorCfg.auxRoleLabel.toLowerCase()}.</p>
               )}
             </div>
           </div>
 
-          {/* Select Coroinhas Chips */}
+          {/* Select Regular Members Chips */}
           <div style={styles.modalSelectorSection}>
-            <h4 style={styles.selectorSectionTitle}>Selecionar Coroinhas</h4>
+            <h4 style={styles.selectorSectionTitle}>{sectorCfg.memberRoleSectionTitle}</h4>
             <div style={styles.selectChipsContainer}>
               {servers
-                .filter(s => s.active && s.category === 'coroinha')
+                .filter(s => s.active && sectorCfg.memberEligibleCategories.includes(s.category))
                 .map(s => {
                   const isSelected = selectedServerIds.includes(s.id);
                   
@@ -1867,8 +1883,8 @@ export default function Schedules() {
                     </button>
                   );
                 })}
-              {servers.filter(s => s.active && s.category === 'coroinha').length === 0 && (
-                <p style={styles.noServersMsg}>Nenhum coroinha ativo cadastrado.</p>
+              {servers.filter(s => s.active && sectorCfg.memberEligibleCategories.includes(s.category)).length === 0 && (
+                <p style={styles.noServersMsg}>Nenhum membro ativo cadastrado para {sectorCfg.memberRoleLabel.toLowerCase()}.</p>
               )}
             </div>
           </div>
@@ -2172,7 +2188,7 @@ export default function Schedules() {
                 {chapel.description && <p style={{...styles.modalDetailText, marginTop: '0.25rem'}}><strong>Sobre:</strong> {chapel.description}</p>}
               </div>
 
-              {userRole === 'admin' && selectedDetailSchedule.status === 'scheduled' && (
+              {isSectorAdmin && selectedDetailSchedule.status === 'scheduled' && (
                 <div style={{
                   marginBottom: '1.5rem',
                   backgroundColor: 'rgba(217, 119, 6, 0.05)',
@@ -2196,10 +2212,10 @@ export default function Schedules() {
                     return (
                       <div key={selectedDetailSchedule.mainCeremonialistId} style={styles.detailServerCard}>
                         <div style={styles.detailServerInfo}>
-                          <span style={styles.serverCategoryBadge('cerimoniario')}>CP</span>
+                          <span style={styles.serverCategoryBadge('cerimoniario')}>{sectorCfg.mainRoleBadge}</span>
                           <div>
                             <span style={styles.detailServerName}><strong>{server.name}</strong></span>
-                            <span style={styles.detailServerSub}>Cerimoniário Principal • {server.phone || 'Sem telefone'}</span>
+                            <span style={styles.detailServerSub}>{sectorCfg.mainRoleTitle} • {server.phone || 'Sem telefone'}</span>
                           </div>
                         </div>
                         {attRecord && (
@@ -2207,14 +2223,14 @@ export default function Schedules() {
                             {attRecord.status === 'present' ? 'Presente' : attRecord.status === 'absent' ? 'Faltou' : 'Justificado'}
                           </span>
                         )}
-                        {selectedDetailSchedule.status === 'scheduled' && userRole === 'admin' && (
+                        {selectedDetailSchedule.status === 'scheduled' && isSectorAdmin && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <button 
                               type="button" 
                               className="btn btn-secondary" 
                               style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid var(--border-color)', margin: 0 }}
                               onClick={() => handleOpenSwapModal(selectedDetailSchedule, selectedDetailSchedule.mainCeremonialistId, server.name, 'main_ceremonialist')}
-                              title="Trocar este cerimoniário por outro"
+                              title="Trocar este membro por outro"
                             >
                               <ArrowLeftRight size={12} /> Trocar
                             </button>
@@ -2223,7 +2239,7 @@ export default function Schedules() {
                               className="btn btn-secondary" 
                               style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid rgba(239, 68, 68, 0.2)', backgroundColor: 'var(--color-absent-bg)', color: 'var(--color-absent)', margin: 0 }}
                               onClick={() => handleRemoveFromServer(selectedDetailSchedule.id, selectedDetailSchedule.mainCeremonialistId, server.name, 'main_ceremonialist')}
-                              title="Remover este cerimoniário da escala"
+                              title="Remover da escala"
                             >
                               <Trash2 size={12} /> Remover
                             </button>
@@ -2233,17 +2249,17 @@ export default function Schedules() {
                     );
                   })()}
 
-                  {/* Ceremonialists */}
+                  {/* Ceremonialists / Aux */}
                   {selectedDetailSchedule.ceremonialistIds && selectedDetailSchedule.ceremonialistIds.map(id => {
                     const server = getServer(id);
                     const attRecord = selectedDetailSchedule.status === 'completed' ? attendance.find(a => a.scheduleId === selectedDetailSchedule.id && a.serverId === id) : null;
                     return (
                       <div key={id} style={styles.detailServerCard}>
                         <div style={styles.detailServerInfo}>
-                          <span style={styles.serverCategoryBadge(server.category)}>C</span>
+                          <span style={styles.serverCategoryBadge(server.category)}>{sectorCfg.auxRoleBadge}</span>
                           <div>
                             <span style={styles.detailServerName}>{server.name}</span>
-                            <span style={styles.detailServerSub}>Cerimoniário • {server.phone || 'Sem telefone'}</span>
+                            <span style={styles.detailServerSub}>{sectorCfg.auxRoleLabel} • {server.phone || 'Sem telefone'}</span>
                           </div>
                         </div>
                         {attRecord && (
@@ -2251,14 +2267,14 @@ export default function Schedules() {
                             {attRecord.status === 'present' ? 'Presente' : attRecord.status === 'absent' ? 'Faltou' : 'Justificado'}
                           </span>
                         )}
-                        {selectedDetailSchedule.status === 'scheduled' && userRole === 'admin' && (
+                        {selectedDetailSchedule.status === 'scheduled' && isSectorAdmin && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <button 
                               type="button" 
                               className="btn btn-secondary" 
                               style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid var(--border-color)', margin: 0 }}
                               onClick={() => handleOpenSwapModal(selectedDetailSchedule, id, server.name, 'cerimonialist')}
-                              title="Trocar este cerimoniário por outro"
+                              title="Trocar este membro por outro"
                             >
                               <ArrowLeftRight size={12} /> Trocar
                             </button>
@@ -2267,7 +2283,7 @@ export default function Schedules() {
                               className="btn btn-secondary" 
                               style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid rgba(239, 68, 68, 0.2)', backgroundColor: 'var(--color-absent-bg)', color: 'var(--color-absent)', margin: 0 }}
                               onClick={() => handleRemoveFromServer(selectedDetailSchedule.id, id, server.name, 'cerimonialist')}
-                              title="Remover este cerimoniário da escala"
+                              title="Remover da escala"
                             >
                               <Trash2 size={12} /> Remover
                             </button>
@@ -2277,17 +2293,17 @@ export default function Schedules() {
                     );
                   })}
 
-                  {/* Altar Servers */}
+                  {/* Altar Servers / Regular Members */}
                   {selectedDetailSchedule.serverIds.map(id => {
                     const server = getServer(id);
                     const attRecord = selectedDetailSchedule.status === 'completed' ? attendance.find(a => a.scheduleId === selectedDetailSchedule.id && a.serverId === id) : null;
                     return (
                       <div key={id} style={styles.detailServerCard}>
                         <div style={styles.detailServerInfo}>
-                          <span style={styles.serverCategoryBadge(server.category)}>Co</span>
+                          <span style={styles.serverCategoryBadge(server.category)}>{sectorCfg.memberRoleBadge}</span>
                           <div>
                             <span style={styles.detailServerName}>{server.name}</span>
-                            <span style={styles.detailServerSub}>Coroinha • {server.phone || 'Sem telefone'}</span>
+                            <span style={styles.detailServerSub}>{sectorCfg.memberRoleLabel} • {server.phone || 'Sem telefone'}</span>
                           </div>
                         </div>
                         {attRecord && (
@@ -2295,14 +2311,14 @@ export default function Schedules() {
                             {attRecord.status === 'present' ? 'Presente' : attRecord.status === 'absent' ? 'Faltou' : 'Justificado'}
                           </span>
                         )}
-                        {selectedDetailSchedule.status === 'scheduled' && userRole === 'admin' && (
+                        {selectedDetailSchedule.status === 'scheduled' && isSectorAdmin && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <button 
                               type="button" 
                               className="btn btn-secondary" 
                               style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid var(--border-color)', margin: 0 }}
                               onClick={() => handleOpenSwapModal(selectedDetailSchedule, id, server.name, 'coroinha')}
-                              title="Trocar este coroinha por outro"
+                              title="Trocar este membro por outro"
                             >
                               <ArrowLeftRight size={12} /> Trocar
                             </button>
@@ -2311,7 +2327,7 @@ export default function Schedules() {
                               className="btn btn-secondary" 
                               style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', border: '1px solid rgba(239, 68, 68, 0.2)', backgroundColor: 'var(--color-absent-bg)', color: 'var(--color-absent)', margin: 0 }}
                               onClick={() => handleRemoveFromServer(selectedDetailSchedule.id, id, server.name, 'coroinha')}
-                              title="Remover este coroinha da escala"
+                              title="Remover da escala"
                             >
                               <Trash2 size={12} /> Remover
                             </button>
@@ -2322,7 +2338,7 @@ export default function Schedules() {
                   })}
 
                   {!selectedDetailSchedule.mainCeremonialistId && selectedDetailSchedule.serverIds.length === 0 && selectedDetailSchedule.ceremonialistIds.length === 0 && (
-                    <p style={styles.noServersMsg}>Nenhum servidor escalado.</p>
+                    <p style={styles.noServersMsg}>Nenhum membro escalado.</p>
                   )}
                 </div>
               </div>
@@ -2356,7 +2372,7 @@ export default function Schedules() {
                 <div style={styles.modalDetailSection}>
                   <h4 style={styles.modalDetailSectionTitle}>Relatório da Celebração</h4>
                   {report ? (
-                    userRole === 'admin' ? (
+                    isSectorAdmin ? (
                       /* Admin: Show full 9 questions */
                       <div style={styles.fullReportGrid}>
                         <div style={styles.fullReportItem}>
@@ -2364,7 +2380,7 @@ export default function Schedules() {
                           <p>{report.dataHorario || '-'}</p>
                         </div>
                         <div style={styles.fullReportItem}>
-                          <strong>2. Cerimoniário Principal:</strong>
+                          <strong>2. {sectorCfg.mainRoleTitle}:</strong>
                           <p>{report.cerimoniarioPrincipal || '-'}</p>
                         </div>
                         <div style={styles.fullReportItem}>
@@ -2410,7 +2426,7 @@ export default function Schedules() {
                 </div>
               )}
 
-              {userRole === 'admin' && selectedDetailSchedule.published === false && selectedDetailSchedule.status === 'scheduled' && (
+              {isSectorAdmin && selectedDetailSchedule.published === false && selectedDetailSchedule.status === 'scheduled' && (
                 <div style={{ marginTop: '1.5rem', marginBottom: '0.75rem' }}>
                   <button 
                     type="button"
@@ -2429,7 +2445,7 @@ export default function Schedules() {
               )}
 
               <div style={{ ...styles.modalDetailActions, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {userRole === 'admin' && selectedDetailSchedule.status === 'scheduled' && (
+                {isSectorAdmin && selectedDetailSchedule.status === 'scheduled' && (
                   <button 
                     type="button" 
                     className="btn btn-primary" 
@@ -2691,7 +2707,7 @@ export default function Schedules() {
       <Modal
         isOpen={swapTarget !== null}
         onClose={() => setSwapTarget(null)}
-        title={`Substituir Servidor - ${swapTarget?.serverName}`}
+        title={`Substituir Membro - ${swapTarget?.serverName}`}
       >
         {swapTarget && (() => {
           const schedule = schedules.find(sc => sc.id === swapTarget.scheduleId);
@@ -2702,11 +2718,12 @@ export default function Schedules() {
           // Available servers should be active, match the category, and not already in this schedule
           const availableServers = servers.filter(s => {
             if (!s.active) return false;
-            // category match
-            if (isMainCerem || isCerem) {
-              if (s.category !== 'cerimoniario') return false;
+            if (isMainCerem) {
+              if (!sectorCfg.mainEligibleCategories.includes(s.category)) return false;
+            } else if (isCerem) {
+              if (!sectorCfg.auxEligibleCategories.includes(s.category)) return false;
             } else {
-              if (s.category !== 'coroinha') return false;
+              if (!sectorCfg.memberEligibleCategories.includes(s.category)) return false;
             }
             
             // not already scheduled on this specific schedule

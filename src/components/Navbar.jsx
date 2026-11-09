@@ -1,5 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
+import { getSectorConfig } from '../utils/sectorConfig';
 import { 
   Church, 
   Calendar, 
@@ -10,35 +11,43 @@ import {
   Menu, 
   X,
   Lock,
-  LogOut
+  LogOut,
+  Home,
+  Music,
+  BookOpen
 } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab }) {
-  const { userRole, logoutAdmin } = useContext(AppContext);
+  const { userRole, adminSector, logoutAdmin } = useContext(AppContext);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isAdmin = userRole === 'admin';
+  const sectorCfg = getSectorConfig(adminSector || 'coroinhas');
 
   // Define nav items based on roles
   const navItems = [];
   if (isAdmin) {
     navItems.push(
       { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
-      { id: 'schedules', label: 'Escalas', icon: Calendar },
+      { id: 'schedules', label: `Escalas (${sectorCfg.name})`, icon: Calendar },
       { id: 'profiles', label: 'Perfis', icon: Users },
       { id: 'chapels', label: 'Capelas', icon: Church },
-      { id: 'reports', label: 'Relatórios', icon: FileText }
+      { id: 'reports', label: 'Relatórios', icon: FileText },
+      { id: 'principal', label: 'Página Principal', icon: Home }
     );
   } else {
-    // Public sees ONLY scales
+    // Public sees Main Page + Separate Pages for each Sector in the top menu
     navItems.push(
-      { id: 'schedules', label: 'Escalas', icon: Calendar }
+      { id: 'principal', label: 'Página Principal', icon: Home },
+      { id: 'schedules-coroinhas', label: 'Coroinhas', icon: Church },
+      { id: 'schedules-musica', label: 'Música', icon: Music },
+      { id: 'schedules-liturgia', label: 'Liturgia', icon: BookOpen }
     );
   }
 
   const handleLogout = () => {
     logoutAdmin();
-    setActiveTab('schedules'); // Redirect public users to scales
+    setActiveTab('principal');
   };
 
   return (
@@ -47,7 +56,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
         {/* Brand/Logo */}
         <div 
           style={styles.brand} 
-          onClick={() => setActiveTab(isAdmin ? 'dashboard' : 'schedules')}
+          onClick={() => setActiveTab(isAdmin ? 'dashboard' : 'principal')}
         >
           <img 
             src="/saint_anthony_icon.png" 
@@ -97,7 +106,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
                 <div style={{ ...styles.adminBadge, justifyContent: 'center' }}>
                   <ShieldCheck size={14} style={{ color: 'var(--primary-gold)' }} />
-                  <span style={styles.adminText}>Administrador</span>
+                  <span style={styles.adminText}>{sectorCfg.adminBadge}</span>
                 </div>
                 <button 
                   onClick={() => {
@@ -137,7 +146,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
             <div style={styles.adminGroup}>
               <div style={styles.adminBadge}>
                 <ShieldCheck size={14} style={{ color: 'var(--primary-gold)' }} />
-                <span style={styles.adminText}>Administrador</span>
+                <span style={styles.adminText}>{sectorCfg.adminBadge}</span>
               </div>
               <button 
                 onClick={handleLogout} 
@@ -273,7 +282,7 @@ const styles = {
     color: 'var(--primary-gold)',
   },
   adminText: {
-    maxWidth: '100px',
+    maxWidth: '160px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',

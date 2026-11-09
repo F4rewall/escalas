@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import { AppContext } from '../context/AppContext';
+import { getSectorConfig, getItemSector, getCategoryInfo } from '../utils/sectorConfig';
 import { 
   FileText, 
   ShieldAlert, 
@@ -13,7 +14,15 @@ import {
 } from 'lucide-react';
 
 export default function Reports() {
-  const { userRole, reports, schedules, chapels, servers, getServerStats } = useContext(AppContext);
+  const { userRole, adminSector, reports: allReports, schedules: allSchedules, chapels, servers: allServers, getServerStats } = useContext(AppContext);
+
+  const activeSector = adminSector || 'coroinhas';
+  const sectorCfg = getSectorConfig(activeSector);
+
+  const schedules = allSchedules.filter(sc => getItemSector(sc) === activeSector);
+  const sectorScheduleIds = new Set(schedules.map(sc => sc.id));
+  const servers = allServers.filter(s => getItemSector(s) === activeSector);
+  const reports = allReports.filter(r => sectorScheduleIds.has(r.scheduleId) || getItemSector(r) === activeSector);
 
   // 1. Role Guard
   if (userRole !== 'admin') {
@@ -43,25 +52,13 @@ export default function Reports() {
     };
   });
 
-  // Category specific calculations
-  const coroinhasStats = serverStatsList.filter(s => s.category === 'coroinha' && s.total > 0);
-  const cerimoniariosStats = serverStatsList.filter(s => s.category === 'cerimoniario' && s.total > 0);
-
-  const coroinhaAvgRate = coroinhasStats.length > 0
-    ? Math.round(coroinhasStats.reduce((acc, curr) => acc + curr.rate, 0) / coroinhasStats.length)
-    : 0;
-
-  const cerimoniarioAvgRate = cerimoniariosStats.length > 0
-    ? Math.round(cerimoniariosStats.reduce((acc, curr) => acc + curr.rate, 0) / cerimoniariosStats.length)
-    : 0;
-
   // Find Top Attenders (Present at least 1 time, sorted by rate desc)
   const topAttenders = [...serverStatsList]
     .filter(s => s.total > 0 && s.rate >= 80)
     .sort((a, b) => b.rate - a.rate || b.present - a.present)
     .slice(0, 4);
 
-  // Find Watchlist / Absentees (Present rate < 60% and total shifts > 0)
+  // Find Watchlist / Absentees (Present rate < 75% and total shifts > 0)
   const watchlist = [...serverStatsList]
     .filter(s => s.total > 0 && s.rate < 75)
     .sort((a, b) => a.rate - b.rate)
@@ -87,9 +84,9 @@ export default function Reports() {
     <div>
       <div className="section-header">
         <div>
-          <h2 className="section-title">Central de Relatórios</h2>
+          <h2 className="section-title">Central de Relatórios ({sectorCfg.name})</h2>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-            Visão detalhada do comportamento das escalas, frequências por categoria e diário de bordo dos coordenadores.
+            Visão detalhada do comportamento das escalas, frequências por categoria e diário de bordo dos coordenadores do setor de {sectorCfg.name}.
           </p>
         </div>
       </div>
@@ -98,27 +95,25 @@ export default function Reports() {
       <div className="reports-layout-grid">
         {/* Category breakdown bar chart */}
         <div className="glass-panel" style={styles.metricChartCard}>
-          <h3 style={styles.chartTitle}><Activity size={18} /> Desempenho por Categoria</h3>
+          <h3 style={styles.chartTitle}><Activity size={18} /> Desempenho por Categoria ({sectorCfg.name})</h3>
           
-          <div style={styles.chartRow}>
-            <div style={styles.chartBarLabel}>
-              <span>Cerimoniários</span>
-              <strong>{cerimoniarioAvgRate}% de Presença</strong>
-            </div>
-            <div style={styles.progressTrack}>
-              <div style={styles.progressFill(cerimoniarioAvgRate, 'var(--cerimoniario-color)')}></div>
-            </div>
-          </div>
-
-          <div style={styles.chartRow}>
-            <div style={styles.chartBarLabel}>
-              <span>Coroinhas</span>
-              <strong>{coroinhaAvgRate}% de Presença</strong>
-            </div>
-            <div style={styles.progressTrack}>
-              <div style={styles.progressFill(coroinhaAvgRate, 'var(--coroinha-color)')}></div>
-            </div>
-          </div>
+          {sectorCfg.categories.map(cat => {
+            const catStats = serverStatsList.filter(s => s.category === cat.id && s.total > 0);
+            const avgRate = catStats.length > 0
+              ? Math.round(catStats.reduce((acc, curr) => acc + curr.rate, 0) / catStats.length)
+              : 0;
+            return (
+              <div key={cat.id} style={styles.chartRow}>
+                <div style={styles.chartBarLabel}>
+                  <span>{cat.plural}</span>
+                  <strong>{avgRate}% de Presença</strong>
+                </div>
+                <div style={styles.progressTrack}>
+                  <div style={styles.progressFill(avgRate, cat.color)}></div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Quick totals info */}
@@ -126,7 +121,7 @@ export default function Reports() {
           <div style={styles.summaryBox}>
             <TrendingUp size={24} style={{ color: 'var(--primary-gold)' }} />
             <div>
-              <span style={styles.summaryLabel}>Total de Missas Escaladas</span>
+              <span style={styles.summaryLabel}>Total de Missas Escaladas ({sectorCfg.name})</span>
               <h2 style={styles.summaryVal}>{schedules.length}</h2>
             </div>
           </div>
@@ -151,23 +146,26 @@ export default function Reports() {
             {topAttenders.length === 0 ? (
               <p style={styles.noDataText}>Dados insuficientes para gerar destaques.</p>
             ) : (
-              topAttenders.map(s => (
-                <div key={s.id} style={styles.tableRow}>
-                  <div style={styles.tableUserCol}>
-                    <div style={styles.miniAvatar(s.category === 'cerimoniario' ? 'var(--cerimoniario-color)' : 'var(--coroinha-color)')}>
-                      {s.name[0]}
+              topAttenders.map(s => {
+                const catInfo = getCategoryInfo(activeSector, s.category);
+                return (
+                  <div key={s.id} style={styles.tableRow}>
+                    <div style={styles.tableUserCol}>
+                      <div style={styles.miniAvatar(catInfo.color)}>
+                        {s.name[0]}
+                      </div>
+                      <div>
+                        <span style={styles.rowName}>{s.name}</span>
+                        <span style={styles.rowCategory}>{catInfo.label}</span>
+                      </div>
                     </div>
-                    <div>
-                      <span style={styles.rowName}>{s.name}</span>
-                      <span style={styles.rowCategory}>{s.category === 'cerimoniario' ? 'Cerimoniário' : 'Coroinha'}</span>
+                    <div style={styles.rowValueCol('#10b981')}>
+                      <span>{s.rate}%</span>
+                      <span style={styles.rowSubvalue}>{s.present} presenças</span>
                     </div>
                   </div>
-                  <div style={styles.rowValueCol('#10b981')}>
-                    <span>{s.rate}%</span>
-                    <span style={styles.rowSubvalue}>{s.present} presenças</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -179,25 +177,28 @@ export default function Reports() {
           </h3>
           <div style={styles.tableList}>
             {watchlist.length === 0 ? (
-              <p style={styles.noDataText}>Nenhum coroinha/cerimoniário com presença crítica.</p>
+              <p style={styles.noDataText}>Nenhum membro com presença crítica neste setor.</p>
             ) : (
-              watchlist.map(s => (
-                <div key={s.id} style={styles.tableRow}>
-                  <div style={styles.tableUserCol}>
-                    <div style={styles.miniAvatar('var(--color-absent)')}>
-                      {s.name[0]}
+              watchlist.map(s => {
+                const catInfo = getCategoryInfo(activeSector, s.category);
+                return (
+                  <div key={s.id} style={styles.tableRow}>
+                    <div style={styles.tableUserCol}>
+                      <div style={styles.miniAvatar('var(--color-absent)')}>
+                        {s.name[0]}
+                      </div>
+                      <div>
+                        <span style={styles.rowName}>{s.name}</span>
+                        <span style={styles.rowCategory}>{catInfo.label}</span>
+                      </div>
                     </div>
-                    <div>
-                      <span style={styles.rowName}>{s.name}</span>
-                      <span style={styles.rowCategory}>{s.category === 'cerimoniario' ? 'Cerimoniário' : 'Coroinha'}</span>
+                    <div style={styles.rowValueCol('var(--color-absent)')}>
+                      <span>{s.rate}%</span>
+                      <span style={styles.rowSubvalue}>{s.absent} faltas</span>
                     </div>
                   </div>
-                  <div style={styles.rowValueCol('var(--color-absent)')}>
-                    <span>{s.rate}%</span>
-                    <span style={styles.rowSubvalue}>{s.absent} faltas</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -207,7 +208,7 @@ export default function Reports() {
       <div className="glass-panel" style={styles.logsSection}>
         <div style={styles.sectionTitleWrapper}>
           <BookOpen size={20} style={{ color: 'var(--primary-gold)' }} />
-          <h3 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>Diário do Altar - Relatórios dos Responsáveis</h3>
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>Diário do Setor ({sectorCfg.name}) - Relatórios dos Responsáveis</h3>
         </div>
 
         <div style={styles.reportsList}>

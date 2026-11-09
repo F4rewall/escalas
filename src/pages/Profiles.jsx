@@ -1,5 +1,6 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
+import { getSectorConfig, getItemSector, getCategoryInfo } from '../utils/sectorConfig';
 import Modal from '../components/Modal';
 import { 
   UserPlus, 
@@ -24,7 +25,8 @@ const formatTime = (time) => {
 export default function Profiles() {
   const { 
     userRole, 
-    servers, 
+    adminSector,
+    servers: allServers, 
     chapels, 
     addServer, 
     updateServer, 
@@ -34,10 +36,19 @@ export default function Profiles() {
     schedules
   } = useContext(AppContext);
 
+  const activeSector = adminSector || 'coroinhas';
+  const sectorCfg = getSectorConfig(activeSector);
+  const servers = allServers.filter(s => getItemSector(s) === activeSector);
+
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' | 'coroinha' | 'cerimoniario'
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all'); // 'all' | 'active' | 'inactive'
+
+  useEffect(() => {
+    setSelectedCategory('all');
+    setSearchTerm('');
+  }, [activeSector]);
 
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -47,7 +58,7 @@ export default function Profiles() {
 
   // Form states
   const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState('coroinha');
+  const [formCategory, setFormCategory] = useState(sectorCfg.categories[0].id);
   const [formPhone, setFormPhone] = useState('');
   const [formActive, setFormActive] = useState(true);
   const [formPrefChapelId, setFormPrefChapelId] = useState('');
@@ -84,7 +95,7 @@ export default function Profiles() {
   const openAddModal = () => {
     setEditingServer(null);
     setFormName('');
-    setFormCategory('coroinha');
+    setFormCategory(sectorCfg.categories[0].id);
     setFormPhone('');
     setFormActive(true);
     setFormPrefChapelId(chapels[0]?.id || '');
@@ -130,7 +141,7 @@ export default function Profiles() {
   const handleFormSubmit = (e) => {
     e.preventDefault();
     if (!formName.trim()) {
-      alert('Preencha o nome do servidor.');
+      alert(`Preencha o nome do ${sectorCfg.memberSingular.toLowerCase()}.`);
       return;
     }
 
@@ -140,7 +151,7 @@ export default function Profiles() {
     );
 
     if (nameExists) {
-      alert(`Já existe um servidor (coroinha ou cerimoniário) cadastrado com o nome "${formName.trim()}". Por favor, adicione um sobrenome ou diferenciador.`);
+      alert(`Já existe um membro cadastrado neste setor com o nome "${formName.trim()}". Por favor, adicione um sobrenome ou diferenciador.`);
       return;
     }
 
@@ -151,6 +162,7 @@ export default function Profiles() {
     }
 
     const serverData = {
+      sector: activeSector,
       name: formName,
       category: formCategory,
       phone: formPhone,
@@ -173,7 +185,7 @@ export default function Profiles() {
 
   const handleDelete = (e, id) => {
     e.stopPropagation();
-    if (confirm('Tem certeza que deseja excluir permanentemente este servidor? Suas estatísticas e registros serão limpos.')) {
+    if (confirm('Tem certeza que deseja excluir permanentemente este cadastro? Suas estatísticas e registros serão limpos.')) {
       deleteServer(id);
     }
   };
@@ -191,15 +203,15 @@ export default function Profiles() {
     <div>
       <div className="section-header">
         <div>
-          <h2 className="section-title">Perfis dos Altaristas</h2>
+          <h2 className="section-title">{sectorCfg.profilesTitle}</h2>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-            Lista completa de Coroinhas e Cerimoniários da paróquia. Clique em um perfil para ver estatísticas de frequência.
+            {sectorCfg.profilesSubtitle}
           </p>
         </div>
         
         {userRole === 'admin' && (
           <button className="btn btn-primary" onClick={openAddModal}>
-            <UserPlus size={16} /> Cadastrar Servidor
+            <UserPlus size={16} /> Cadastrar {sectorCfg.memberSingular}
           </button>
         )}
       </div>
@@ -228,18 +240,15 @@ export default function Profiles() {
               >
                 Todos
               </button>
-              <button 
-                style={{...styles.pillBtn, ...(selectedCategory === 'coroinha' ? styles.pillBtnActive : {})}}
-                onClick={() => setSelectedCategory('coroinha')}
-              >
-                Coroinhas
-              </button>
-              <button 
-                style={{...styles.pillBtn, ...(selectedCategory === 'cerimoniario' ? styles.pillBtnActive : {})}}
-                onClick={() => setSelectedCategory('cerimoniario')}
-              >
-                Cerimoniários
-              </button>
+              {sectorCfg.categories.map(cat => (
+                <button 
+                  key={cat.id}
+                  style={{...styles.pillBtn, ...(selectedCategory === cat.id ? styles.pillBtnActive : {})}}
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  {cat.plural}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -259,13 +268,13 @@ export default function Profiles() {
         </div>
       </div>
 
-      {/* Altar boy cards list */}
+      {/* Member cards list */}
       {filteredServers.length === 0 ? (
         <div className="glass-panel" style={styles.emptyContainer}>
           <Search size={48} style={{ color: 'var(--color-text-muted)', marginBottom: '1rem' }} />
-          <h3>Nenhum servidor correspondente</h3>
+          <h3>Nenhum membro correspondente</h3>
           <p style={{ color: 'var(--color-text-secondary)', marginTop: '0.25rem' }}>
-            Tente mudar as opções de filtros ou verifique a ortografia do nome procurado.
+            Tente mudar as opções de filtros ou cadastre novos membros para o setor de {sectorCfg.name}.
           </p>
         </div>
       ) : (
@@ -273,6 +282,7 @@ export default function Profiles() {
           {filteredServers.map(server => {
             const stats = getServerStats(server.id);
             const isHighAttendance = stats.rate >= 90 && stats.total >= 3;
+            const catInfo = getCategoryInfo(activeSector, server.category);
             
             return (
               <div 
@@ -281,8 +291,15 @@ export default function Profiles() {
                 onClick={() => openDetailModal(server)}
               >
                 <div style={styles.cardHeader}>
-                  <span className={`badge ${server.category === 'cerimoniario' ? 'badge-cerimoniario' : 'badge-coroinha'}`}>
-                    {server.category === 'cerimoniario' ? 'Cerimoniário' : 'Coroinha'}
+                  <span
+                    className={`badge ${catInfo.badgeClass}`}
+                    style={{
+                      backgroundColor: `${catInfo.color}20`,
+                      color: catInfo.color,
+                      border: `1px solid ${catInfo.color}40`
+                    }}
+                  >
+                    {catInfo.label}
                   </span>
                   
                   {!server.active && (
@@ -350,7 +367,7 @@ export default function Profiles() {
       <Modal 
         isOpen={isFormModalOpen} 
         onClose={() => setIsFormModalOpen(false)}
-        title={editingServer ? 'Editar Cadastro do Servidor' : 'Cadastrar Novo Servidor'}
+        title={editingServer ? `Editar Cadastro (${sectorCfg.name})` : `Cadastrar Novo ${sectorCfg.memberSingular}`}
       >
         <form onSubmit={handleFormSubmit}>
           <div className="form-group">
@@ -366,28 +383,20 @@ export default function Profiles() {
           </div>
 
           <div className="form-group">
-            <label>Categoria de Altar</label>
-            <div style={styles.formRadioGroup}>
-              <label style={styles.radioLabel}>
-                <input 
-                  type="radio" 
-                  name="formCategory" 
-                  value="coroinha"
-                  checked={formCategory === 'coroinha'}
-                  onChange={() => setFormCategory('coroinha')}
-                />
-                Coroinha
-              </label>
-              <label style={styles.radioLabel}>
-                <input 
-                  type="radio" 
-                  name="formCategory" 
-                  value="cerimoniario"
-                  checked={formCategory === 'cerimoniario'}
-                  onChange={() => setFormCategory('cerimoniario')}
-                />
-                Cerimoniário
-              </label>
+            <label>Função / Categoria ({sectorCfg.name})</label>
+            <div style={{ ...styles.formRadioGroup, flexWrap: 'wrap' }}>
+              {sectorCfg.categories.map(cat => (
+                <label key={cat.id} style={styles.radioLabel}>
+                  <input 
+                    type="radio" 
+                    name="formCategory" 
+                    value={cat.id}
+                    checked={formCategory === cat.id}
+                    onChange={() => setFormCategory(cat.id)}
+                  />
+                  {cat.label}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -424,7 +433,7 @@ export default function Profiles() {
                 checked={formActive} 
                 onChange={(e) => setFormActive(e.target.checked)} 
               />
-              Servidor Ativo (Disponível para escalas)
+              Membro Ativo (Disponível para escalas)
             </label>
           </div>
 
@@ -451,6 +460,7 @@ export default function Profiles() {
       >
         {selectedServerForDetails && (() => {
           const stats = getServerStats(selectedServerForDetails.id);
+          const detailCatInfo = getCategoryInfo(activeSector, selectedServerForDetails.category);
           // Get historical attendance records
           const history = attendance
             .filter(a => a.serverId === selectedServerForDetails.id)
@@ -493,7 +503,7 @@ export default function Profiles() {
                 </div>
 
                 <div style={styles.detailMetaBlock}>
-                  <p><strong>Categoria:</strong> {selectedServerForDetails.category === 'cerimoniario' ? 'Cerimoniário' : 'Coroinha'}</p>
+                  <p><strong>Categoria:</strong> {detailCatInfo.label}</p>
                   {selectedServerForDetails.phone && (
                     <p><strong>WhatsApp:</strong> {selectedServerForDetails.phone}</p>
                   )}

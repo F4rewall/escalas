@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ShieldAlert, KeyRound, Lock, ArrowRight } from 'lucide-react';
+import { ShieldAlert, KeyRound, Lock, ArrowRight, Church, Music, BookOpen } from 'lucide-react';
 
 export default function AdminLogin({ setActiveTab }) {
   const { loginAsAdmin } = useContext(AppContext);
@@ -11,11 +11,11 @@ export default function AdminLogin({ setActiveTab }) {
     e.preventDefault();
     setError('');
 
-    const success = loginAsAdmin(password);
-    if (success) {
-      setActiveTab('dashboard'); // Redirect to dashboard after login
+    const sector = loginAsAdmin(password);
+    if (sector) {
+      setActiveTab('dashboard'); // Redirect to sector dashboard after login
     } else {
-      setError('Senha incorreta. Tente novamente.');
+      setError('Senha incorreta. Digite a senha do seu setor (Coroinhas, Música ou Liturgia).');
       setPassword('');
     }
   };
@@ -27,20 +27,32 @@ export default function AdminLogin({ setActiveTab }) {
           <Lock size={32} style={{ color: 'var(--primary-gold)' }} />
         </div>
 
-        <h2 style={styles.title}>Área Restrita</h2>
+        <h2 style={styles.title}>Área do Coordenador</h2>
         <p style={styles.subtitle}>
-          Digite a senha de acesso para liberar as funções de administrador, escalas, cadastros e relatórios paroquiais.
+          Digite a senha exclusiva do seu setor para gerenciar suas escalas, membros e relatórios. Cada coordenador acessa apenas o seu próprio setor.
         </p>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '1.5rem', width: '100%' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '999px', backgroundColor: 'rgba(217, 119, 6, 0.12)', border: '1px solid rgba(217, 119, 6, 0.3)', color: 'var(--primary-gold)', fontWeight: 600 }}>
+            <Church size={12} /> Coroinhas
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '999px', backgroundColor: 'rgba(14, 165, 233, 0.12)', border: '1px solid rgba(14, 165, 233, 0.3)', color: '#38bdf8', fontWeight: 600 }}>
+            <Music size={12} /> Música
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '999px', backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#34d399', fontWeight: 600 }}>
+            <BookOpen size={12} /> Liturgia
+          </span>
+        </div>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div className="form-group" style={{ position: 'relative' }}>
-            <label htmlFor="admin-pass" style={styles.label}>Senha do Administrador</label>
+            <label htmlFor="admin-pass" style={styles.label}>Senha do Setor</label>
             <div style={styles.inputContainer}>
               <KeyRound size={18} style={styles.inputIcon} />
               <input
                 id="admin-pass"
                 type="password"
-                placeholder="Digite a senha..."
+                placeholder="Digite a senha do seu setor..."
                 className="form-control"
                 style={styles.input}
                 value={password}
@@ -59,7 +71,7 @@ export default function AdminLogin({ setActiveTab }) {
           )}
 
           <button type="submit" className="btn btn-primary" style={styles.submitBtn}>
-            Entrar no Painel <ArrowRight size={16} />
+            Entrar no Painel do Setor <ArrowRight size={16} />
           </button>
         </form>
       </div>

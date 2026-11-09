@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import { AppContext } from '../context/AppContext';
+import { getSectorConfig, getItemSector } from '../utils/sectorConfig';
 import { 
   Users, 
   Calendar, 
@@ -19,7 +20,13 @@ const formatTime = (time) => {
 };
 
 export default function Dashboard({ setActiveTab }) {
-  const { userRole, servers, chapels, schedules, attendance, clearAllData } = useContext(AppContext);
+  const { userRole, adminSector, servers: allServers, chapels, schedules: allSchedules, attendance, clearAllData } = useContext(AppContext);
+
+  const activeSector = adminSector || 'coroinhas';
+  const sectorCfg = getSectorConfig(activeSector);
+
+  const servers = allServers.filter(s => getItemSector(s) === activeSector);
+  const schedules = allSchedules.filter(sc => getItemSector(sc) === activeSector);
 
   // Compute stats
   const totalServers = servers.length;
@@ -103,7 +110,9 @@ export default function Dashboard({ setActiveTab }) {
         <div style={styles.heroContent}>
           <h1 className="hero-title">Ad Maiorem Dei Gloriam</h1>
           <p style={styles.heroText}>
-            Portal Litúrgico da Paróquia de Santo Antônio. Organização, compromisso e zelo nas escalas dos Coroinhas e Cerimoniários para o serviço do Altar.
+            {activeSector === 'coroinhas'
+              ? 'Portal Litúrgico da Paróquia de Santo Antônio. Organização, compromisso e zelo nas escalas dos Coroinhas e Cerimoniários para o serviço do Altar.'
+              : `Portal Litúrgico da Paróquia de Santo Antônio • Coordenação do Setor de ${sectorCfg.fullName}. Gerencie escalas, membros e relatórios exclusivos do seu setor.`}
           </p>
           {userRole !== 'admin' && (
             <button className="btn btn-primary" onClick={() => setActiveTab('schedules')} style={{ marginTop: '1.25rem' }}>
@@ -120,7 +129,7 @@ export default function Dashboard({ setActiveTab }) {
             <TrendingUp size={24} style={{ color: '#10b981' }} />
           </div>
           <div>
-            <span style={styles.statLabel}>Presença Geral</span>
+            <span style={styles.statLabel}>Presença Geral ({sectorCfg.name})</span>
             <h2 style={styles.statVal}>{overallAttendanceRate}%</h2>
           </div>
         </div>
@@ -130,7 +139,7 @@ export default function Dashboard({ setActiveTab }) {
             <Users size={24} style={{ color: '#8b5cf6' }} />
           </div>
           <div>
-            <span style={styles.statLabel}>Servidores Ativos</span>
+            <span style={styles.statLabel}>{sectorCfg.memberPlural} Ativos</span>
             <h2 style={styles.statVal}>{activeServers} <span style={{ fontSize: '1rem', color: 'var(--color-text-secondary)' }}>/ {totalServers}</span></h2>
           </div>
         </div>
@@ -140,7 +149,7 @@ export default function Dashboard({ setActiveTab }) {
             <Calendar size={24} style={{ color: 'var(--primary-gold)' }} />
           </div>
           <div>
-            <span style={styles.statLabel}>Próximas Escalas</span>
+            <span style={styles.statLabel}>Próximas Escalas ({sectorCfg.name})</span>
             <h2 style={styles.statVal}>{upcomingSchedules.length}</h2>
           </div>
         </div>
@@ -161,7 +170,7 @@ export default function Dashboard({ setActiveTab }) {
         {/* Left Column: Upcoming schedules */}
         <div className="glass-panel" style={styles.panelSection}>
           <div style={styles.panelHeader}>
-            <h3 style={styles.panelTitle}>Escalas Mais Próximas</h3>
+            <h3 style={styles.panelTitle}>Escalas Mais Próximas ({sectorCfg.name})</h3>
             <button 
               onClick={() => setActiveTab('schedules')} 
               style={styles.panelLink}
@@ -173,7 +182,7 @@ export default function Dashboard({ setActiveTab }) {
           <div style={styles.scheduleList}>
             {nextThree.length === 0 ? (
               <div style={styles.emptyState}>
-                <p>Nenhuma escala futura agendada no momento.</p>
+                <p>Nenhuma escala futura agendada para {sectorCfg.name} no momento.</p>
               </div>
             ) : (
               nextThree.map(sc => (
@@ -191,14 +200,14 @@ export default function Dashboard({ setActiveTab }) {
                       {sc.serverIds.length > 0 && (
                         <div style={styles.roleListItem}>
                           <span style={styles.roleDot('var(--coroinha-color)')}></span>
-                          <span style={styles.roleLabelText}>Coroinhas:</span>
+                          <span style={styles.roleLabelText}>{sectorCfg.memberRoleLabel}:</span>
                           <span style={styles.roleNames}>{getServerNames(sc.serverIds)}</span>
                         </div>
                       )}
                       {(sc.mainCeremonialistId || (sc.ceremonialistIds && sc.ceremonialistIds.length > 0)) && (
                         <div style={styles.roleListItem}>
                           <span style={styles.roleDot('var(--cerimoniario-color)')}></span>
-                          <span style={styles.roleLabelText}>Cerimoniários:</span>
+                          <span style={styles.roleLabelText}>{sectorCfg.mainRoleShortLabel}:</span>
                           <span style={styles.roleNames}>{getCeremonialistNames(sc)}</span>
                         </div>
                       )}
@@ -215,7 +224,7 @@ export default function Dashboard({ setActiveTab }) {
           {/* Quick Actions (only for admin) */}
           {userRole === 'admin' && (
             <div className="glass-panel" style={styles.panelSection}>
-              <h3 style={{...styles.panelTitle, marginBottom: '1.25rem'}}>Ações de Administrador</h3>
+              <h3 style={{...styles.panelTitle, marginBottom: '1.25rem'}}>Ações de Admin ({sectorCfg.name})</h3>
               <div style={styles.actionGrid}>
                 <button 
                   onClick={() => setActiveTab('schedules')} 
@@ -223,8 +232,8 @@ export default function Dashboard({ setActiveTab }) {
                 >
                   <ClipboardCheck size={20} style={{ color: 'var(--primary-gold)' }} />
                   <div>
-                    <span style={styles.actionBtnTitle}>Montar Escala</span>
-                    <span style={styles.actionBtnDesc}>Criar nova escala de missa</span>
+                    <span style={styles.actionBtnTitle}>Montar Escala ({sectorCfg.name})</span>
+                    <span style={styles.actionBtnDesc}>Criar nova escala do setor</span>
                   </div>
                 </button>
 
@@ -234,8 +243,8 @@ export default function Dashboard({ setActiveTab }) {
                 >
                   <UserPlus size={20} style={{ color: '#8b5cf6' }} />
                   <div>
-                    <span style={styles.actionBtnTitle}>Cadastrar Servidor</span>
-                    <span style={styles.actionBtnDesc}>Adicionar coroinha/cerimoniário</span>
+                    <span style={styles.actionBtnTitle}>Cadastrar {sectorCfg.memberSingular}</span>
+                    <span style={styles.actionBtnDesc}>Adicionar membro em {sectorCfg.name}</span>
                   </div>
                 </button>
 
@@ -252,9 +261,9 @@ export default function Dashboard({ setActiveTab }) {
 
                 <button 
                   onClick={() => {
-                    if (confirm("⚠️ ATENÇÃO: Isso irá apagar permanentemente todas as capelas, servidores, escalas e relatórios salvos. Deseja continuar?")) {
-                      clearAllData();
-                      alert("Sistema redefinido com sucesso! Todos os dados de teste foram apagados.");
+                    if (confirm(`⚠️ ATENÇÃO: Isso irá apagar permanentemente todos os membros, escalas e relatórios do setor de ${sectorCfg.name}. Deseja continuar?`)) {
+                      clearAllData(activeSector);
+                      alert(`Dados do setor de ${sectorCfg.name} foram limpos com sucesso!`);
                     }
                   }} 
                   className="dashboard-action-btn"
@@ -265,8 +274,8 @@ export default function Dashboard({ setActiveTab }) {
                 >
                   <Trash2 size={20} style={{ color: 'var(--color-absent)' }} />
                   <div>
-                    <span style={{...styles.actionBtnTitle, color: 'var(--color-absent)'}}>Limpar Sistema</span>
-                    <span style={styles.actionBtnDesc}>Apagar todos os dados permanentemente</span>
+                    <span style={{...styles.actionBtnTitle, color: 'var(--color-absent)'}}>Limpar Setor ({sectorCfg.name})</span>
+                    <span style={styles.actionBtnDesc}>Apagar dados apenas deste setor</span>
                   </div>
                 </button>
               </div>
