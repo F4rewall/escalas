@@ -1,6 +1,7 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import { getSectorConfig, getItemSector } from '../utils/sectorConfig';
+import { formatBotMessage, formatScheduleTeamText, formatBrDate } from '../utils/botHelpers';
 import Modal from '../components/Modal';
 import { 
   Plus, 
@@ -18,7 +19,8 @@ import {
   Edit3,
   ArrowLeftRight,
   GripVertical,
-  RotateCcw
+  RotateCcw,
+  Bot
 } from 'lucide-react';
 
 // Helper to get next N Saturdays (dayOfWeek = 6) or Sundays (dayOfWeek = 0)
@@ -262,7 +264,10 @@ export default function Schedules({ sector }) {
     resetSchedulesOrder,
     submitAttendanceAndReport,
     attendance,
-    reports
+    reports,
+    getBotConfig,
+    queueBotMessage,
+    resolveBotSwapAlert
   } = useContext(AppContext);
 
   const activeSector = sector || (userRole === 'admin' ? adminSector : 'coroinhas');
@@ -1599,6 +1604,23 @@ export default function Schedules({ sector }) {
                       <span style={{ color: 'var(--color-text-primary)' }}>Código Relatório: <strong style={{ color: 'var(--primary-gold)' }}>{sc.code}</strong></span>
                     </div>
                   )}
+                  {isSectorAdmin && sc.status === 'scheduled' && sc.botSwapStatus === 'swap_reported' && (
+                    <div style={{
+                      marginTop: '0.35rem',
+                      padding: '0.35rem 0.6rem',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                      border: '1px solid rgba(239, 68, 68, 0.35)',
+                      color: '#fca5a5',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}>
+                      <Bot size={13} /> Troca informada via WhatsApp!
+                    </div>
+                  )}
                 </div>
 
                 <hr style={styles.divider} />
@@ -1822,9 +1844,22 @@ export default function Schedules({ sector }) {
               {servers
                 .filter(s => s.active && sectorCfg.mainEligibleCategories.includes(s.category))
                 .map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.phone ? `• ${s.phone}` : '• (Sem celular)'}
+                  </option>
                 ))}
             </select>
+            {selectedCeremonialistId && (() => {
+              const chosen = servers.find(s => s.id === selectedCeremonialistId);
+              if (chosen && (!chosen.phone || chosen.phone.replace(/\D/g, '').length < 10)) {
+                return (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--color-absent)', marginTop: '0.25rem' }}>
+                    ⚠️ {chosen.name} está sem celular cadastrado. Cadastre o WhatsApp em Perfis para o Chatbot conseguir enviar as mensagens.
+                  </span>
+                );
+              }
+              return null;
+            })()}
             {servers.filter(s => s.active && sectorCfg.mainEligibleCategories.includes(s.category)).length === 0 && (
               <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
                 Nenhum {sectorCfg.mainRoleTitle.toLowerCase()} ativo cadastrado neste setor.
@@ -2188,19 +2223,107 @@ export default function Schedules({ sector }) {
                 {chapel.description && <p style={{...styles.modalDetailText, marginTop: '0.25rem'}}><strong>Sobre:</strong> {chapel.description}</p>}
               </div>
 
-              {isSectorAdmin && selectedDetailSchedule.status === 'scheduled' && (
-                <div style={{
-                  marginBottom: '1.5rem',
-                  backgroundColor: 'rgba(217, 119, 6, 0.05)',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color)'
-                }}>
-                  <p style={{...styles.modalDetailText, margin: 0, color: 'var(--color-text-primary)'}}>
-                    🔑 <strong>Código do Relatório (Passar ao Principal):</strong> <strong style={{ color: 'var(--primary-gold)', fontSize: '1.2rem', letterSpacing: '0.05em' }}>{selectedDetailSchedule.code}</strong>
-                  </p>
-                </div>
-              )}
+              {isSectorAdmin && selectedDetailSchedule.status === 'scheduled' && (() => {
+                const principal = servers.find(s => s.id === selectedDetailSchedule.mainCeremonialistId);
+                const hasPhone = principal?.phone && principal.phone.replace(/\D/g, '').length >= 10;
+                const botCfg = getBotConfig(activeSector);
+
+                const sendFromDetails = async (type) => {
+                  if (!principal || !hasPhone) {
+                    alert(`O ${sectorCfg.mainRoleTitle} precisa ter celular cadastrado em Perfis para receber mensagem do Chatbot.`);
+                    return;
+                  }
+                  const vars = {
+                    comandante: principal.name,
+                    cargoPrincipal: sectorCfg.mainRoleTitle,
+                    setor: sectorCfg.name,
+                    capela: chapel.name,
+                    data: formatBrDate(selectedDetailSchedule.date),
+                    horario: selectedDetailSchedule.time || '',
+                    codigo: selectedDetailSchedule.code || '',
+                    siteUrl: botCfg.siteUrl || window.location.origin,
+                    equipe: formatScheduleTeamText(selectedDetailSchedule, servers, sectorCfg)
+                  };
+                  const template = type === 'swap_check' ? botCfg.swapMessageTemplate : botCfg.codeMessageTemplate;
+                  const res = await queueBotMessage({
+                    sector: activeSector,
+                    scheduleId: selectedDetailSchedule.id,
+                    type,
+                    targetPhone: principal.phone,
+                    targetName: principal.name,
+                    message: formatBotMessage(template, vars),
+                    scheduleSummary: `${chapel.name} • ${formatBrDate(selectedDetailSchedule.date)} ${selectedDetailSchedule.time || ''}`
+                  });
+                  if (res.ok) {
+                    alert(`Mensagem enviada para a fila do Chatbot para ${principal.name} (${principal.phone}).`);
+                  }
+                };
+
+                return (
+                  <div style={{
+                    marginBottom: '1.5rem',
+                    backgroundColor: 'rgba(217, 119, 6, 0.05)',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    <p style={{...styles.modalDetailText, margin: 0, color: 'var(--color-text-primary)'}}>
+                      🔑 <strong>Código do Relatório (Passar ao Principal):</strong> <strong style={{ color: 'var(--primary-gold)', fontSize: '1.2rem', letterSpacing: '0.05em' }}>{selectedDetailSchedule.code}</strong>
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                        onClick={() => sendFromDetails('swap_check')}
+                      >
+                        <Bot size={13} /> Bot: Perguntar Troca
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                        onClick={() => sendFromDetails('report_code')}
+                      >
+                        <KeyRound size={13} /> Bot: Enviar Código
+                      </button>
+                    </div>
+
+                    {selectedDetailSchedule.botSwapReply && (
+                      <div style={{
+                        marginTop: '0.75rem',
+                        padding: '0.6rem 0.75rem',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        fontSize: '0.8rem',
+                        color: '#fca5a5',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span><strong>Resposta do WhatsApp:</strong> "{selectedDetailSchedule.botSwapReply}"</span>
+                        {selectedDetailSchedule.botSwapStatus === 'swap_reported' && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
+                            onClick={() => {
+                              resolveBotSwapAlert(selectedDetailSchedule.id);
+                              setSelectedDetailSchedule(prev => ({ ...prev, botSwapStatus: 'resolved' }));
+                            }}
+                          >
+                            Marcar Resolvido
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div style={styles.modalDetailSection}>
                 <h4 style={styles.modalDetailSectionTitle}>Equipe Escalada</h4>

@@ -969,6 +969,16 @@ h1, h2, h3, h4, .brand-font {
   display: none;
 }
 
+.mobile-only-bell {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only-bell {
+    display: inline-flex;
+  }
+}
+
 /* Presence Call Forms */
 .attendance-form-row {
   display: grid;

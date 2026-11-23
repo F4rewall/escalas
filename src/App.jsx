@@ -7,20 +7,25 @@ import PublicHome from './pages/PublicHome';
 import Profiles from './pages/Profiles';
 import Chapels from './pages/Chapels';
 import Reports from './pages/Reports';
+import ChatbotConfig from './pages/ChatbotConfig';
 import AdminLogin from './pages/AdminLogin';
 import './App.css';
 
 function AppContent() {
   const { userRole, adminSector, loading } = useContext(AppContext);
   const isAdmin = userRole === 'admin';
+  const isChatUser = userRole === 'chat';
 
   const [activeTab, setActiveTab] = useState(() => {
+    if (userRole === 'chat') return 'chatbot';
     return userRole === 'admin' ? 'dashboard' : 'principal';
   });
 
   // Keep activeTab in sync with role changes (e.g. login/logout)
   useEffect(() => {
-    if (userRole === 'admin') {
+    if (userRole === 'chat') {
+      setActiveTab('chatbot');
+    } else if (userRole === 'admin') {
       setActiveTab('dashboard');
     } else {
       setActiveTab('principal');
@@ -47,7 +52,16 @@ function AppContent() {
 
   const renderActivePage = () => {
     const publicAllowedTabs = ['principal', 'schedules-coroinhas', 'schedules-musica', 'schedules-liturgia', 'schedules-mece', 'admin-login'];
-    const currentTab = (!isAdmin && !publicAllowedTabs.includes(activeTab)) ? 'principal' : activeTab;
+    const chatAllowedTabs = ['chatbot', 'principal', 'schedules-coroinhas', 'schedules-musica', 'schedules-liturgia', 'schedules-mece'];
+
+    let currentTab = activeTab;
+    if (isChatUser) {
+      currentTab = chatAllowedTabs.includes(activeTab) ? activeTab : 'chatbot';
+    } else if (!isAdmin) {
+      currentTab = publicAllowedTabs.includes(activeTab) ? activeTab : 'principal';
+    } else if (activeTab === 'chatbot') {
+      currentTab = 'dashboard';
+    }
 
     switch (currentTab) {
       case 'principal':
@@ -70,6 +84,8 @@ function AppContent() {
         return <Chapels />;
       case 'reports':
         return <Reports />;
+      case 'chatbot':
+        return <ChatbotConfig setActiveTab={setActiveTab} />;
       case 'admin-login':
         return <AdminLogin setActiveTab={setActiveTab} />;
       default:

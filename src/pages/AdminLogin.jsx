@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ShieldAlert, KeyRound, Lock, ArrowRight, Church, Music, BookOpen, HeartHandshake } from 'lucide-react';
+import { ShieldAlert, KeyRound, Lock, ArrowRight, Church, Music, BookOpen, HeartHandshake, Bot } from 'lucide-react';
 
 export default function AdminLogin({ setActiveTab }) {
   const { loginAsAdmin } = useContext(AppContext);
@@ -12,10 +12,12 @@ export default function AdminLogin({ setActiveTab }) {
     setError('');
 
     const sector = loginAsAdmin(password);
-    if (sector) {
+    if (sector === 'chat') {
+      setActiveTab('chatbot');
+    } else if (sector) {
       setActiveTab('dashboard'); // Redirect to sector dashboard after login
     } else {
-      setError('Senha incorreta. Digite a senha do seu setor (Coroinhas, Música, Liturgia ou MECE).');
+      setError('Senha incorreta. Digite a senha do seu setor (Coroinhas, Música, Liturgia, MECE) ou do usuário chat.');
       setPassword('');
     }
   };
@@ -44,6 +46,9 @@ export default function AdminLogin({ setActiveTab }) {
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '999px', backgroundColor: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fb7185', fontWeight: 600 }}>
             <HeartHandshake size={12} /> MECE
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '999px', backgroundColor: 'rgba(139, 92, 246, 0.14)', border: '1px solid rgba(139, 92, 246, 0.35)', color: '#c4b5fd', fontWeight: 600 }}>
+            <Bot size={12} /> chat (Chatbot)
           </span>
         </div>
 

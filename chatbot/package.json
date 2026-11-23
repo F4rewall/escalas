@@ -1,0 +1,19 @@
+{
+  "name": "escala-chatbot-whatsapp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chatbot WhatsApp conectado ao Firestore para confirmacao de trocas e envio do codigo de relatorio das escalas",
+  "scripts": {
+    "start": "node index.js",
+    "init-db": "node runInitDb.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
+    "dotenv": "^16.4.7",
+    "firebase": "^12.14.0",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

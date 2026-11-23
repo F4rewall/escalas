@@ -1,6 +1,7 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { getSectorConfig } from '../utils/sectorConfig';
+import NotificationBell from './NotificationBell';
 import { 
   Church, 
   Calendar, 
@@ -15,7 +16,8 @@ import {
   Home,
   Music,
   BookOpen,
-  HeartHandshake
+  HeartHandshake,
+  Bot
 } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab }) {
@@ -23,11 +25,19 @@ export default function Navbar({ activeTab, setActiveTab }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isAdmin = userRole === 'admin';
+  const isChatUser = userRole === 'chat';
+  const isAuthenticated = isAdmin || isChatUser;
   const sectorCfg = getSectorConfig(adminSector || 'coroinhas');
+  const authBadgeText = isChatUser ? 'chat • Chatbot Geral' : sectorCfg.adminBadge;
 
   // Define nav items based on roles
   const navItems = [];
-  if (isAdmin) {
+  if (isChatUser) {
+    navItems.push(
+      { id: 'chatbot', label: 'Chatbot Geral', icon: Bot },
+      { id: 'principal', label: 'Página Principal', icon: Home }
+    );
+  } else if (isAdmin) {
     navItems.push(
       { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
       { id: 'schedules', label: `Escalas (${sectorCfg.name})`, icon: Calendar },
@@ -58,7 +68,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
         {/* Brand/Logo */}
         <div 
           style={styles.brand} 
-          onClick={() => setActiveTab(isAdmin ? 'dashboard' : 'principal')}
+          onClick={() => setActiveTab(isChatUser ? 'chatbot' : isAdmin ? 'dashboard' : 'principal')}
         >
           <img 
             src="/saint_anthony_icon.png" 
@@ -70,14 +80,19 @@ export default function Navbar({ activeTab, setActiveTab }) {
           </div>
         </div>
 
-        {/* Mobile menu toggle */}
-        <button 
-          className="mobile-nav-toggle"
-          style={styles.mobileToggle} 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        {/* Mobile Bell + Menu Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="mobile-only-bell">
+            <NotificationBell setActiveTab={setActiveTab} />
+          </div>
+          <button 
+            className="mobile-nav-toggle"
+            style={styles.mobileToggle} 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
 
         {/* Navigation Links */}
         <div className={`nav-links-wrapper ${mobileMenuOpen ? 'open' : ''}`}>
@@ -104,11 +119,11 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
           {/* Mobile-only auth details inside the menu drawer */}
           <div className="mobile-only-auth">
-            {isAdmin ? (
+            {isAuthenticated ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
                 <div style={{ ...styles.adminBadge, justifyContent: 'center' }}>
                   <ShieldCheck size={14} style={{ color: 'var(--primary-gold)' }} />
-                  <span style={styles.adminText}>{sectorCfg.adminBadge}</span>
+                  <span style={styles.adminText}>{authBadgeText}</span>
                 </div>
                 <button 
                   onClick={() => {
@@ -144,11 +159,14 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
         {/* Authenticated Admin Badge or Login Button (Desktop Only) */}
         <div className="desktop-only-auth" style={styles.authWrapper}>
-          {isAdmin ? (
+          <div style={{ marginRight: '0.65rem' }}>
+            <NotificationBell setActiveTab={setActiveTab} />
+          </div>
+          {isAuthenticated ? (
             <div style={styles.adminGroup}>
               <div style={styles.adminBadge}>
                 <ShieldCheck size={14} style={{ color: 'var(--primary-gold)' }} />
-                <span style={styles.adminText}>{sectorCfg.adminBadge}</span>
+                <span style={styles.adminText}>{authBadgeText}</span>
               </div>
               <button 
                 onClick={handleLogout} 

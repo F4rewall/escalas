@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistente Virtual da Paróquia Santo Antônio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+    <script src="berit-config.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-gradient-to-r from-amber-700 via-amber-800 to-slate-900 border-b border-amber-600/30 px-4 py-3 flex items-center justify-between shadow-lg z-10">
+        <div class="flex items-center space-x-3">
+            <div class="relative">
+                <div class="w-11 h-11 rounded-full bg-black border-2 border-amber-400 flex items-center justify-center overflow-hidden shadow-inner">
+                    <img src="logoberitbot.jpg" alt="Elo" class="w-full h-full object-cover">
+                </div>
+                <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+            </div>
+            <div>
+                <h1 class="font-bold text-base text-white">Assistente Virtual • Paróquia Santo Antônio</h1>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="clearChat()" class="text-slate-300 hover:text-white p-2 rounded-lg hover:bg-white/10 transition text-sm flex items-center gap-1.5" title="Reiniciar Conversa">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span class="hidden sm:inline">Reiniciar</span>
+            </button>
+        </div>
+    </header>
+
+    <main id="chat-container" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-950/50 flex flex-col">
+        
+        <!-- Mensagem de Boas-Vindas do Bot -->
+        <div class="flex items-start space-x-3 max-w-2xl">
+            <div class="w-9 h-9 rounded-full bg-black border border-amber-500 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-md">
+                <img src="logoberitbot.jpg" alt="Elo" class="w-full h-full object-cover">
+            </div>
+            <div class="space-y-2">
+                <div class="bg-slate-800 border border-slate-700/60 rounded-2xl rounded-tl-sm p-4 text-slate-200 shadow-sm leading-relaxed text-sm sm:text-base">
+                    <p class="font-semibold text-amber-400 mb-1">Paz de Cristo! 🙏 Seja muito bem-vindo(a)!</p>
+                    <p>Eu sou o <strong>Assistente Virtual da Paróquia Santo Antônio</strong> (Paróquia Santo Antônio de Lisboa - Jardim Aureny III). Posso te ajudar a marcar confissões, direção espiritual, batismos, reuniões, informações de dízimos, doações, escalas ou dúvidas sobre a fé católica!</p>
+                    <p class="mt-2 text-slate-300">Como posso te ajudar hoje?</p>
+                </div>
+                <span class="text-[11px] text-slate-500 block px-1">Agora mesmo</span>
+            </div>
+        </div>
+
+        <!-- Sugestões Rápidas para o Jovem -->
+        <div class="pl-12 flex flex-wrap gap-2 pt-2">
+            <button onclick="sendQuickPrompt('Onde e quando acontecem os encontros do Grupo de Jovens Berit?')" class="text-xs bg-slate-800 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 px-3 py-1.5 rounded-full transition shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-location-dot"></i> Onde é o Encontro?
+            </button>
+            <button onclick="sendQuickPrompt('O que é o Grupo de Jovens Berit?')" class="text-xs bg-slate-800 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 px-3 py-1.5 rounded-full transition shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-users"></i> O que é o Berit?
+            </button>
+            <button onclick="sendQuickPrompt('Como me confessar bem e fazer um bom exame de consciência?')" class="text-xs bg-slate-800 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 px-3 py-1.5 rounded-full transition shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-book-bible"></i> Como se confessar?
+            </button>
+            <button onclick="sendQuickPrompt('Me ensine uma oração bonita para começar bem o dia.')" class="text-xs bg-slate-800 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 px-3 py-1.5 rounded-full transition shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-sun"></i> Oração do Dia
+            </button>
+        </div>
+
+    </main>
+
+    <footer class="bg-slate-900 border-t border-slate-800 p-3 sm:p-4 shadow-lg">
+        <form id="chat-form" onsubmit="handleSendMessage(event)" class="max-w-4xl mx-auto flex items-center gap-2">
+            <div class="relative flex-1">
+                <input 
+                    type="text" 
+                    id="user-input" 
+                    placeholder="Digite sua dúvida ou oi..." 
+                    class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-4 py-3.5 text-sm sm:text-base text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-inner pr-10"
+                    autocomplete="off"
+                    required
+                >
+            </div>
+            <button 
+                type="submit" 
+                id="send-button"
+                class="bg-amber-600 hover:bg-amber-500 text-white px-5 py-3.5 rounded-xl transition flex items-center justify-center font-medium shadow-md hover:shadow-amber-600/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <i class="fa-solid fa-paper-plane text-base"></i>
+            </button>
+        </form>
+    </footer>
+
+    <script>
+        let chatHistory = [];
+
+        const systemPrompt = `Você é o Assistente Virtual da Paróquia Santo Antônio de Lisboa, localizada no Jardim Aureny III (Palmas - TO).
+Possui profundo conhecimento da fé católica, Magistério, Catecismo (CIC) e Tradição, além de orientar os fiéis sobre marcação de confissões, direção espiritual, batismos, reuniões, dízimos, doações e escalas pastorais.
+
+DIRETRIZES DE RESTRIÇÃO DE ASSUNTO (MUITO IMPORTANTE):
+1. FOCO CATÓLICO E DA PARÓQUIA: Você deve responder apenas sobre a fé católica, doutrina, sacramentos, liturgia, orações, vida dos santos, moral cristã ou sobre a Paróquia Santo Antônio (atendimentos, confissões, batismos, dízimo, escalas e pastorais).
+2. RECUSA DE ASSUNTOS EXTERNOS: Se o usuário perguntar sobre assuntos totalmente fora do contexto católico ou da paróquia, recuse cordialmente e redirecione para a fé ou vida paroquial.
+3. SAUDAÇÕES E FORMATAÇÃO: Comece saudações com "Paz de Cristo!". Nunca use asteriscos (*) para formatar texto.`;
+
+DIRETRIZ DE RESPOSTA (MUITO IMPORTANTE):
+1. SEJA DIRETO E OBJETIVO: Por padrão, dê respostas curtas, diretas e concisas ao ponto. Evite textos longos ou excessivos para perguntas simples.
+2. EXPANDA APENAS SE SOLICITADO: Só explique detalhadamente, aprofunde conceitos ou dê explicações maiores se o usuário pedir explicitamente algo como "explique melhor", "detalhe mais", "me explique o porquê" ou perguntas equivalentes.
+3. Tom: Cordial, fraterno, jovem, acolhedor e com clareza cristã. Use saudações leves ("A paz de Cristo!", "Salve Maria!").`;
+
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function sendQuickPrompt(promptText) {
+            userInput.value = promptText;
+            document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+        }
+
+        function clearChat() {
+            chatHistory = [];
+            chatContainer.innerHTML = `
+                <div class="flex items-start space-x-3 max-w-2xl">
+                    <div class="w-9 h-9 rounded-full bg-black border border-amber-500 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-md">
+                        <img src="logoberitbot.jpg" alt="Elo" class="w-full h-full object-cover">
+                    </div>
+                    <div class="space-y-2">
+                        <div class="bg-slate-800 border border-slate-700/60 rounded-2xl rounded-tl-sm p-4 text-slate-200 shadow-sm leading-relaxed text-sm sm:text-base">
+                            <p class="font-semibold text-amber-400 mb-1">Conversa reiniciada! 🙏</p>
+                            <p>Olá novamente! Respondo de forma direta e objetiva. Como posso te ajudar?</p>
+                        </div>
+                        <span class="text-[11px] text-slate-500 block px-1">Agora mesmo</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function handleSendMessage(event) {
+            event.preventDefault();
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            userInput.value = '';
+            userInput.disabled = true;
+            sendButton.disabled = true;
+
+            appendMessage(text, 'user');
+
+            const loadingId = 'loading-' + Date.now();
+            appendLoadingMessage(loadingId);
+            scrollToBottom();
+
+            chatHistory.push({ role: 'user', parts: [{ text: text }] });
+
+            try {
+                const botResponse = await callGeminiAPI(chatHistory);
+                document.getElementById(loadingId).remove();
+
+                await typedMessage(botResponse);
+                chatHistory.push({ role: 'model', parts: [{ text: botResponse }] });
+
+            } catch (error) {
+                console.error("Erro ao chamar a API:", error);
+                document.getElementById(loadingId).remove();
+                let errorMsg = "Desculpe, tive um pequeno problema de conexão. Poderia repetir?";
+                if (error.message === "CHAVE_API_AUSENTE") {
+                    errorMsg = "⚠️ Elo temporariamente indisponível. Tente novamente em instantes.";
+                } else if (error.message.includes("CHAVE_INVALIDA")) {
+                    errorMsg = "⚠️ Chave de API rejeitada pelo Google (" + error.message + "). Verifique se a chave está correta e se a API Generative Language está ativada em https://console.cloud.google.com";
+                } else if (error.message === "LIMITE_COTA") {
+                    const wait = error.retryAfter || 30;
+                    errorMsg = `⏳ Limite gratuito do Gemini atingido (429). Aguarde ${wait}s e tente novamente.`;
+                } else {
+                    errorMsg = "Desculpe, tive um problema de conexão: " + error.message.slice(0,200) + "\nTente novamente em instantes.";
+                }
+                await typedMessage(errorMsg);
+                chatHistory.pop();
+            } finally {
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus();
+                scrollToBottom();
+            }
+        }
+
+        function appendMessage(text, sender) {
+            const isUser = sender === 'user';
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex items-start space-x-3 max-w-2xl ${isUser ? 'ml-auto flex-row-reverse space-x-reverse' : ''}`;
+            
+            const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const formattedText = escapeHtml(text)
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300 font-semibold">$1</strong>')
+                .replace(/\*(.*?)\*(?!\*)/g, '<em class="italic">$1</em>')
+                .replace(/\n/g, '<br>');
+
+            messageDiv.innerHTML = `
+                <div class="w-9 h-9 rounded-full ${isUser ? 'bg-amber-500 text-slate-950' : 'bg-black border border-amber-500'} flex-shrink-0 flex items-center justify-center font-bold shadow-md overflow-hidden">
+                    ${isUser ? '<i class="fa-solid fa-user text-sm"></i>' : '<img src="logoberitbot.jpg" alt="Elo" class="w-full h-full object-cover">'}
+                </div>
+                <div class="space-y-1">
+                    <div class="${isUser ? 'bg-amber-600/90 text-white rounded-tr-sm' : 'bg-slate-800 border border-slate-700/60 text-slate-200 rounded-tl-sm'} rounded-2xl p-4 shadow-sm leading-relaxed text-sm sm:text-base">
+                        ${formattedText}
+                    </div>
+                    <span class="text-[11px] text-slate-500 block px-1 ${isUser ? 'text-right' : ''}">${timeString}</span>
+                </div>
+            `;
+            chatContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        async function typedMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'flex items-start space-x-3 max-w-2xl';
+            
+            const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            messageDiv.innerHTML = `
+                <div class="w-9 h-9 rounded-full bg-black border border-amber-500 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-md">
+                    <img src="logoberitbot.jpg" alt="Elo" class="w-full h-full object-cover">
+                </div>
+                <div class="space-y-1">
+                    <div class="bg-slate-800 border border-slate-700/60 text-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm leading-relaxed text-sm sm:text-base message-content">
+                        <span class="typing-cursor inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse"></span>
+                    </div>
+                    <span class="text-[11px] text-slate-500 block px-1">${timeString}</span>
+                </div>
+            `;
+
+            chatContainer.appendChild(messageDiv);
+            const contentDiv = messageDiv.querySelector('.message-content');
+            
+            let currentText = '';
+            const speed = 10;
+
+            for (let i = 0; i < text.length; i++) {
+                currentText += text[i];
+                
+                const formatted = escapeHtml(currentText)
+                    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300 font-semibold">$1</strong>')
+                    .replace(/\*(.*?)\*(?!\*)/g, '<em class="italic">$1</em>')
+                    .replace(/\n/g, '<br>');
+
+                contentDiv.innerHTML = formatted + '<span class="typing-cursor inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse"></span>';
+                
+                if (i % 5 === 0) {
+                    scrollToBottom();
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, speed));
+            }
+
+            const finalFormatted = escapeHtml(text)
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300 font-semibold">$1</strong>')
+                .replace(/\*(.*?)\*(?!\*)/g, '<em class="italic">$1</em>')
+                .replace(/\n/g, '<br>');
+            
+            contentDiv.innerHTML = finalFormatted;
+            scrollToBottom();
+        }
+
+        function appendLoadingMessage(id) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = id;
+            loadingDiv.className = 'flex items-start space-x-3 max-w-2xl';
+            loadingDiv.innerHTML = `
+                <div class="w-9 h-9 rounded-full bg-black border border-amber-500 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-md">
+                    <img src="logoberitbot.jpg" alt="Elo" class="w-full h-full object-cover">
+                </div>
+                <div class="bg-slate-800 border border-slate-700/60 rounded-2xl rounded-tl-sm p-4 text-slate-400 shadow-sm flex items-center space-x-2">
+                    <div class="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                    <div class="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    <div class="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                    <span class="text-xs text-slate-400 ml-2 font-medium">Pensando...</span>
+                </div>
+            `;
+            chatContainer.appendChild(loadingDiv);
+        }
+
+        function escapeHtml(string) {
+            return string
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        async function callGeminiAPI(history, retries = 3, delay = 1000) {
+            let apiKey = (window.BERIT_API_KEY || "").trim();
+            apiKey = apiKey.replace(/^["']|["']$/g, "");
+            // Fallback Vercel: busca chave via /api/key se berit-config.js estiver vazio (evita commit de segredo no GitHub)
+            if ((!apiKey || apiKey.length < 20) && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                try {
+                    const r = await fetch('/api/key');
+                    if (r.ok) {
+                        const j = await r.json();
+                        if (j.key) { apiKey = (j.key || "").trim(); window.BERIT_API_KEY = apiKey; }
+                    }
+                } catch {}
+            }
+            if (!apiKey || apiKey === "SUA_CHAVE_AQUI" || apiKey.length < 20) throw new Error("CHAVE_API_AUSENTE");
+            // Modelos em ordem de tentativa - v1beta pode nao ter gemini-1.5-flash em alguns projetos
+            const models = ["gemini-2.0-flash", "gemini-2.0-flash-001", "gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.5-flash-latest"];
+            let modelIdx = 0;
+            const useSearch = new URLSearchParams(window.location.search).has('search');
+            const payload = {
+                contents: history,
+                ...(useSearch ? { tools: [{ "google_search": {} }] } : {}),
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const model = models[modelIdx];
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        const errBody = await response.text();
+                        console.error("Erro API:", model, response.status, errBody);
+                        // Se modelo nao existe (404), tenta proximo modelo da lista
+                        if (response.status === 404 && errBody.includes("is not found") && modelIdx < models.length - 1) {
+                            console.warn(`Modelo ${model} nao encontrado, tentando ${models[modelIdx+1]}`);
+                            modelIdx++;
+                            continue;
+                        }
+                        if (response.status === 400 || response.status === 403) throw new Error(`CHAVE_INVALIDA (${response.status})`);
+                        if (response.status === 429) {
+                            let wait = 20;
+                            try { const j = JSON.parse(errBody); const d = j.error?.details?.find(x=>x['@type']?.includes('RetryInfo'))?.retryDelay; if(d) wait = parseInt(d) || 20; } catch {}
+                            if (i < retries - 1) { await new Promise(r => setTimeout(r, wait * 1000)); continue; }
+                            const e = new Error("LIMITE_COTA"); e.retryAfter = wait; throw e;
+                        }
+                        throw new Error(`Erro HTTP: ${response.status} - ${errBody.slice(0,300)}`);
+                    }
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate && candidate.content?.parts?.[0]?.text) return candidate.content.parts[0].text;
+                    else if (result.candidates?.[0]?.finishReason === 'SAFETY') return "Sua pergunta foi bloqueada pelo filtro de segurança. Tente reformular.";
+                    else throw new Error("Resposta inválida da API.");
+                } catch (error) {
+                    if (error.message.includes("CHAVE")) throw error;
+                    if (error.message === "LIMITE_COTA") throw error;
+                    if (i === retries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
+        window.addEventListener('DOMContentLoaded', () => {
+            const k = (window.BERIT_API_KEY || "").trim();
+            if (!k || k.length < 20) console.warn("Elo: sem chave válida em berit-config.js");
+        });
+    </script>
+</body>
+</html>

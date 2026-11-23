@@ -33,7 +33,9 @@ export default function Profiles() {
     deleteServer,
     getServerStats,
     attendance,
-    schedules
+    schedules,
+    pendingEditServerId,
+    setPendingEditServerId
   } = useContext(AppContext);
 
   const activeSector = adminSector || 'coroinhas';
@@ -49,6 +51,23 @@ export default function Profiles() {
     setSelectedCategory('all');
     setSearchTerm('');
   }, [activeSector]);
+
+  // Open edit modal automatically if navigated from Notification Bell
+  useEffect(() => {
+    if (pendingEditServerId && servers.length > 0) {
+      const target = servers.find((s) => s.id === pendingEditServerId);
+      if (target) {
+        setEditingServer(target);
+        setFormName(target.name);
+        setFormCategory(target.category);
+        setFormPhone(target.phone || '');
+        setFormActive(target.active);
+        setFormPrefChapelId(target.preferredChapelId || '');
+        setIsFormModalOpen(true);
+      }
+      setPendingEditServerId(null);
+    }
+  }, [pendingEditServerId, servers]);
 
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -156,8 +175,8 @@ export default function Profiles() {
     }
 
     const cleanPhone = formPhone.replace(/\D/g, '');
-    if (cleanPhone.length > 0 && cleanPhone.length < 10) {
-      alert('O número de telefone/WhatsApp deve ter 10 ou 11 dígitos.');
+    if (cleanPhone.length < 10) {
+      alert('Informe um número de celular/WhatsApp válido com DDD (10 ou 11 dígitos). Ele é obrigatório para avisos e para o chatbot da escala.');
       return;
     }
 
@@ -325,18 +344,23 @@ export default function Profiles() {
                   </div>
                 </div>
 
-                <div style={styles.cardInfo}>
-                  {server.phone && (
+                  <div style={styles.cardInfo}>
+                    {server.phone ? (
+                      <div style={styles.infoRow}>
+                        <Phone size={12} style={{ color: 'var(--color-present)' }} />
+                        <span>{server.phone}</span>
+                      </div>
+                    ) : (
+                      <div style={{ ...styles.infoRow, color: 'var(--primary-gold)' }}>
+                        <Phone size={12} />
+                        <span>Sem celular cadastrado</span>
+                      </div>
+                    )}
                     <div style={styles.infoRow}>
-                      <Phone size={12} />
-                      <span>{server.phone}</span>
+                      <Church size={12} />
+                      <span style={styles.truncateText}>Capela: {getChapelName(server.preferredChapelId)}</span>
                     </div>
-                  )}
-                  <div style={styles.infoRow}>
-                    <Church size={12} />
-                    <span style={styles.truncateText}>Capela: {getChapelName(server.preferredChapelId)}</span>
                   </div>
-                </div>
 
                 {/* Admin edit/delete tools overlay */}
                 {userRole === 'admin' && (
@@ -402,14 +426,18 @@ export default function Profiles() {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Telefone / WhatsApp</label>
+              <label>Celular / WhatsApp *</label>
               <input 
-                type="text" 
-                placeholder="Ex: (11) 99999-9999" 
+                type="tel" 
+                placeholder="Ex: (63) 99999-9999" 
                 className="form-control"
                 value={formPhone}
                 onChange={handlePhoneChange}
+                required
               />
+              <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                Obrigatório para contato e envio automático do chatbot ao responsável da escala.
+              </span>
             </div>
             <div className="form-group">
               <label>Capela Preferencial (Escalar com frequência)</label>

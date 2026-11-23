@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Coleções principais de escalas, membros e capelas
+    match /chapels/{docId} { allow read, write: if true; }
+    match /servers/{docId} { allow read, write: if true; }
+    match /schedules/{docId} { allow read, write: if true; }
+    match /attendance/{docId} { allow read, write: if true; }
+    match /reports/{docId} { allow read, write: if true; }
+
+    // Novas coleções do Chatbot, Assistente Paroquial, Sininho e Trocas
+    match /bot_configs/{docId} { allow read, write: if true; }
+    match /bot_status/{docId} { allow read, write: if true; }
+    match /bot_logs/{docId} { allow read, write: if true; }
+    match /bot_outbox/{docId} { allow read, write: if true; }
+    match /parish_settings/{docId} { allow read, write: if true; }
+    match /system_requests/{docId} { allow read, write: if true; }
+    match /parish_requests/{docId} { allow read, write: if true; }
+    match /swap_requests/{docId} { allow read, write: if true; }
+  }
+}
+

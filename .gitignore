@@ -28,3 +28,8 @@ dist-ssr
 # Environment variables
 .env
 .env*.local
+
+# WhatsApp Chatbot session & dependencies
+chatbot/auth_info/
+chatbot/node_modules/
+chatbot/.env
