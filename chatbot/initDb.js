@@ -77,8 +77,10 @@ export async function ensureFirestoreBase(db, siteUrlFallback = 'http://localhos
   // 3. Base parish assistant menu & services configuration (parish_settings/whatsapp_menu)
   const parishSettingsRef = doc(db, 'parish_settings', 'whatsapp_menu');
   const parishSnap = await getDoc(parishSettingsRef);
-  if (!parishSnap.exists()) {
-    await setDoc(parishSettingsRef, {
+  const existingParish = parishSnap.exists() ? parishSnap.data() : {};
+  await setDoc(
+    parishSettingsRef,
+    {
       id: 'whatsapp_menu',
       assistantName: 'Assistente Virtual da Paróquia Santo Antônio',
       greeting: 'Paz de Cristo!',
@@ -90,11 +92,14 @@ export async function ensureFirestoreBase(db, siteUrlFallback = 'http://localhos
         { number: 4, key: 'reuniao', label: 'Reuniões', enabled: true },
         { number: 5, key: 'dizimo', label: 'Dízimos', enabled: true },
         { number: 6, key: 'doacao', label: 'Doações', enabled: true },
-        { number: 7, key: 'escalas', label: 'Escalas (Troca, Código, Ver minhas escalas)', enabled: true }
+        { number: 7, key: 'escalas', label: 'Escalas (Troca, Código, Ver minhas escalas)', enabled: true },
+        { number: 8, key: 'outros', label: 'Outros', enabled: true }
       ],
-      initializedAt: nowIso
-    });
-  }
+      initializedAt: existingParish.initializedAt || nowIso,
+      updatedAt: nowIso
+    },
+    { merge: true }
+  );
 
   // 4. Base bot_status/main if missing
   const statusRef = doc(db, 'bot_status', 'main');

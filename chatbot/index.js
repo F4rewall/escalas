@@ -749,13 +749,14 @@ function buildMainMenuText(name = '') {
     `Paz de Cristo${name ? `, ${name}` : ''}! 🙏\n\n` +
     `Eu sou o Assistente Virtual da Paróquia Santo Antônio.\n` +
     `Como posso ajudar você hoje?\n\n` +
-    `1. Marcar Confissão\n` +
-    `2. Direção Espiritual\n` +
-    `3. Batismos\n` +
-    `4. Reuniões\n` +
-    `5. Dízimos\n` +
-    `6. Doações\n` +
-    `7. Escalas\n\n` +
+    `1 - ⛪🙏 Marcar Confissão\n\n` +
+    `2 - 🧭✨ Direção Espiritual\n\n` +
+    `3 - 💧🕊️ Batismos\n\n` +
+    `4 - 🤝📅 Reuniões\n\n` +
+    `5 - 🌾❤️ Dízimos\n\n` +
+    `6 - 🎁🤲 Doações\n\n` +
+    `7 - 📋⛪ Escalas\n\n` +
+    `8 - 💬❓ Outros\n\n` +
     `Responda com o número ou digite sua pergunta!`
   );
 }
@@ -927,6 +928,8 @@ async function handleIncomingMessage(msg) {
           ? 'Informe o nome da criança, nome dos pais e a data pretendida:'
           : type === 'confissao'
           ? `${getSectorConfig('global').confessionScheduleInfo}\n\nQual dia e horário de sua preferência?`
+          : type === 'outros'
+          ? 'Digite aqui sua dúvida, recado ou solicitação para a equipe da Paróquia:'
           : 'Qual dia/horário preferido ou observação para esse atendimento?';
       await replyDirect(remoteJid, `Obrigado, ${text}! Agora ${hint.charAt(0).toLowerCase() + hint.slice(1)}`);
       return;
@@ -1116,6 +1119,8 @@ async function handleIncomingMessage(msg) {
             ? `${cfg.dizimoInfo}\n\nDeseja fazer cadastro, solicitar chave PIX ou deixar alguma observação?`
             : type === 'doacao'
             ? `${cfg.doacoesInfo}\n\nQual doação você gostaria de fazer ou combinar?`
+            : type === 'outros'
+            ? 'Pode digitar aqui sua dúvida, recado ou solicitação que vamos responder e encaminhar para a equipe da Paróquia!'
             : 'Qual dia/horário preferido e observação?';
         await replyDirect(remoteJid, `Paz de Cristo, ${personName}! Vamos registrar sua solicitação de ${label}.\n\n${extra}`);
       } else {
@@ -1131,6 +1136,7 @@ async function handleIncomingMessage(msg) {
     if (norm === '4' || norm.includes('reunia')) return await startBooking('reuniao', 'Reunião');
     if (norm === '5' || norm.includes('dizim')) return await startBooking('dizimo', 'Dízimo');
     if (norm === '6' || norm.includes('doac') || norm.includes('doar')) return await startBooking('doacao', 'Doação');
+    if (norm === '8' || norm === 'outro' || norm === 'outros') return await startBooking('outros', 'Outros Assuntos');
 
     if (norm === '7' || norm.includes('escala') || norm.includes('minhas escalas')) {
       if (personMatches.length === 0) {
