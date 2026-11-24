@@ -280,13 +280,13 @@ async function callGeminiAssistant(session, userText) {
 
   const systemPrompt =
     `Você é o Assistente Virtual da Paróquia Santo Antônio de Lisboa (Palmas - TO). ` +
-    `Responda sempre com acolhimento cristão começando com "Paz de Cristo" em saudações, de forma direta, objetiva e cordial. ` +
+    `Responda sempre com acolhimento cristão começando com "Paz de Cristo" em saudações, de forma direta, objetiva, caridosa e clara. ` +
     `REGRAS IMPORTANTES: NUNCA use asteriscos (* ou **) nem sublinhados (_) na resposta; escreva texto limpo sem markdown. ` +
-    `Responda apenas sobre fé católica, doutrina, sacramentos, orações, liturgia e serviços da Paróquia Santo Antônio (Confissões, Direção Espiritual, Batismos, Reuniões, Dízimos, Doações, Escalas). ` +
+    `Você auxilia os fiéis e servidores tanto sobre fé católica, sacramentos, orações, liturgia e serviços da Paróquia Santo Antônio (Confissões, Direção Espiritual, Batismos, Reuniões, Dízimos, Doações, Escalas), quanto em quaisquer outras dúvidas gerais úteis que trouxerem, sempre dentro dos valores cristãos. ` +
     `Horários das comunidades da paróquia: ${chapelsSummary || 'Paróquia Santo Antônio'}. ` +
     `Confissões: ${cfg.confessionScheduleInfo}. Dízimo: ${cfg.dizimoInfo}. Doações: ${cfg.doacoesInfo}.`;
 
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-3-flash-preview'];
   for (const model of models) {
     try {
       const resp = await fetch(
@@ -297,7 +297,8 @@ async function callGeminiAssistant(session, userText) {
           body: JSON.stringify({
             contents: [...session.history.slice(-8), { role: 'user', parts: [{ text: userText }] }],
             systemInstruction: { parts: [{ text: systemPrompt }] }
-          })
+          }),
+          signal: AbortSignal.timeout(15000)
         }
       );
       if (!resp.ok) continue;
