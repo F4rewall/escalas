@@ -61,7 +61,7 @@ const sessions = new Map();
 
 function getSession(jid) {
   if (!sessions.has(jid)) {
-    sessions.set(jid, { step: 'idle', data: {}, identifiedPhone: '', history: [] });
+    sessions.set(jid, { step: 'idle', data: {}, identifiedPhone: '', history: [], welcomed: false });
   }
   return sessions.get(jid);
 }
@@ -745,10 +745,16 @@ async function checkScheduledNotifications() {
 }
 
 // --- Conversational Menu Builders ---
-function buildMainMenuText(name = '') {
+function buildWelcomeText(name = '') {
   return (
     `Paz de Cristo${name ? `, ${name}` : ''}! 🙏\n\n` +
-    `Eu sou o Assistente Virtual da Paróquia Santo Antônio.\n` +
+    `Seja muito bem-vindo(a) ao canal de atendimento do Assistente Virtual da Paróquia Santo Antônio!\n` +
+    `Aqui você pode marcar atendimentos da paróquia, tirar dúvidas sobre a nossa fé ou consultar suas escalas.`
+  );
+}
+
+function buildMainMenuText() {
+  return (
     `Como posso ajudar você hoje?\n\n` +
     `1 - ⛪🙏 Marcar Confissão\n\n` +
     `2 - 🧭✨ Direção Espiritual\n\n` +
@@ -760,6 +766,15 @@ function buildMainMenuText(name = '') {
     `8 - 💬❓ Outros\n\n` +
     `Responda com o número ou digite sua pergunta!`
   );
+}
+
+async function sendWelcomeThenMenu(remoteJid, name = '', session = null) {
+  await replyDirect(remoteJid, buildWelcomeText(name));
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  await replyDirect(remoteJid, buildMainMenuText());
+  if (session) {
+    session.welcomed = true;
+  }
 }
 
 function buildEscalasMenuText(name = '') {
@@ -859,7 +874,11 @@ async function handleIncomingMessage(msg) {
     if (norm === 'menu' || norm === 'voltar' || norm === 'inicio' || norm === 'cancelar') {
       session.step = 'idle';
       session.data = {};
-      await replyDirect(remoteJid, buildMainMenuText(personName));
+      if (!session.welcomed) {
+        await sendWelcomeThenMenu(remoteJid, personName, session);
+      } else {
+        await replyDirect(remoteJid, buildMainMenuText());
+      }
       return;
     }
 
@@ -1155,22 +1174,27 @@ async function handleIncomingMessage(msg) {
       return;
     }
 
-    // 7. Greeting -> Menu
+    // 7. Greeting -> Welcome message + Options menu
     if (/^(oi|ola|olá|bom dia|boa tarde|boa noite|paz|paz de cristo|salve maria|ajuda|start)$/i.test(norm)) {
-      await replyDirect(remoteJid, buildMainMenuText(personName));
+      await sendWelcomeThenMenu(remoteJid, personName, session);
       return;
     }
 
     // 8. Conversational Gemini AI for Catholic faith & parish questions (when Gemini API Key is set)
     const aiReply = await callGeminiAssistant(session, text);
     if (aiReply) {
+      if (!session.welcomed) {
+        await replyDirect(remoteJid, buildWelcomeText(personName));
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        session.welcomed = true;
+      }
       session.history.push({ role: 'model', parts: [{ text: aiReply }] });
       await replyDirect(remoteJid, aiReply);
       return;
     }
 
-    // Default clean menu response
-    await replyDirect(remoteJid, buildMainMenuText(personName));
+    // Default: Welcome message + Options menu
+    await sendWelcomeThenMenu(remoteJid, personName, session);
   } catch (err) {
     console.error('Erro ao processar mensagem recebida:', err);
   }
