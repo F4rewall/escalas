@@ -312,6 +312,23 @@ async function upsertContactMemory(senderDigits, patch = {}) {
   }
 }
 
+function trimCleanlyForHistory(text = '', maxLen = 1200) {
+  const clean = stripMarkdown(String(text || ''));
+  if (clean.length <= maxLen) return clean;
+  const cut = clean.slice(0, maxLen - 3);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > maxLen * 0.6 ? cut.slice(0, lastSpace) : cut).trim() + '...';
+}
+
+function extractGeminiText(json) {
+  const parts = json?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .filter((p) => !p?.thought && typeof p?.text === 'string')
+    .map((p) => p.text)
+    .join('');
+}
+
 async function appendContactHistory(senderDigits, newTurns = [], extraPatch = {}) {
   if (!senderDigits || !Array.isArray(newTurns) || newTurns.length === 0) return;
   const existing = findContactMemory(senderDigits) || {};
@@ -320,7 +337,7 @@ async function appendContactHistory(senderDigits, newTurns = [], extraPatch = {}
     .filter((t) => t && t.text && String(t.text).trim())
     .map((t) => ({
       role: t.role === 'model' ? 'model' : 'user',
-      text: stripMarkdown(String(t.text)).slice(0, 500),
+      text: trimCleanlyForHistory(t.text, 1200),
       at: t.at || new Date().toISOString(),
       ...(t.topic ? { topic: String(t.topic).slice(0, 80) } : {})
     }));
@@ -351,7 +368,7 @@ async function replyAndTrack(remoteJid, senderDigits, text, { recordText = null,
   const cleanText = stripMarkdown(text);
   await replyDirect(remoteJid, cleanText);
   const session = getSession(remoteJid);
-  const savedBotText = stripMarkdown(recordText || cleanText).slice(0, 500);
+  const savedBotText = trimCleanlyForHistory(recordText || cleanText, 1200);
   if (savedBotText) {
     session.history.push({ role: 'model', parts: [{ text: savedBotText }], at: new Date().toISOString() });
     if (session.history.length > MAX_PERSISTED_HISTORY * 2) {
@@ -669,7 +686,7 @@ async function evaluateUserResponse(expectedType, rawText, context = {}) {
     `  "helpMessage": "se valid=false, escreva uma mensagem acolhedora começando com Paz de Cristo! explicando por que não parece válido e dando 1 ou 2 exemplos claros de como escrever corretamente. NUNCA use asteriscos (*) nem sublinhados (_)."\n` +
     `}`;
 
-  const models = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
+  const models = ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite'];
   for (const model of models) {
     try {
       const resp = await fetch(
@@ -689,7 +706,7 @@ async function evaluateUserResponse(expectedType, rawText, context = {}) {
       );
       if (!resp.ok) continue;
       const json = await resp.json();
-      const rawJson = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const rawJson = extractGeminiText(json);
       if (!rawJson) continue;
       const parsed = JSON.parse(rawJson);
       if (typeof parsed.valid === 'boolean') {
@@ -767,7 +784,7 @@ async function callGeminiAssistant(session, userText, personContext = '') {
     (personContext ? `\n\nDADOS E CONVERSAS ANTERIORES JÁ LEMBRADAS DESTE CONTATO (use com naturalidade, demonstre continuidade e nunca peça de novo o que já sabe):\n${personContext}` : '');
 
   const contents = buildGeminiContents(session?.history || [], userText);
-  const models = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-3-flash-preview'];
+  const models = ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3-flash-preview'];
   for (const model of models) {
     try {
       const resp = await fetch(
@@ -777,14 +794,17 @@ async function callGeminiAssistant(session, userText, personContext = '') {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents,
-            systemInstruction: { parts: [{ text: systemPrompt }] }
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: {
+              maxOutputTokens: 1024
+            }
           }),
           signal: AbortSignal.timeout(15000)
         }
       );
       if (!resp.ok) continue;
       const json = await resp.json();
-      const reply = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const reply = extractGeminiText(json);
       if (reply) return stripMarkdown(reply);
     } catch {
       // try next model
