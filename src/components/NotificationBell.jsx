@@ -380,7 +380,7 @@ export default function NotificationBell({ setActiveTab }) {
                     <option value="coroinhas">Para: Coroinhas</option>
                     <option value="musica">Para: Música</option>
                     <option value="liturgia">Para: Liturgia</option>
-                    <option value="mece">Para: MECE</option>
+                    <option value="mece">Para: MESCE</option>
                   </select>
                 )}
                 <input

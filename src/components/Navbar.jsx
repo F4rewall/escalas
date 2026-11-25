@@ -53,7 +53,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
       { id: 'schedules-coroinhas', label: 'Coroinhas', icon: Church },
       { id: 'schedules-musica', label: 'Música', icon: Music },
       { id: 'schedules-liturgia', label: 'Liturgia', icon: BookOpen },
-      { id: 'schedules-mece', label: 'MECE', icon: HeartHandshake }
+      { id: 'schedules-mece', label: 'MESCE', icon: HeartHandshake }
     );
   }
 

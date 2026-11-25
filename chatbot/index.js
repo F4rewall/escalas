@@ -37,7 +37,7 @@ const SECTOR_META = {
   coroinhas: { name: 'Coroinhas', mainRoleTitle: 'Cerimoniário Principal', auxLabel: 'Cerimoniários', memberLabel: 'Coroinhas' },
   musica: { name: 'Música', mainRoleTitle: 'Responsável Musical', auxLabel: 'Cantores / Vocais', memberLabel: 'Instrumentistas' },
   liturgia: { name: 'Liturgia', mainRoleTitle: 'Coordenador / Comentarista', auxLabel: 'Salmista / Comentaristas', memberLabel: 'Leitores' },
-  mece: { name: 'MECE', mainRoleTitle: 'Ministro Coordenador', auxLabel: 'Ministros Auxiliares', memberLabel: 'Ministros (MECE)' }
+  mece: { name: 'MESCE', mainRoleTitle: 'Ministro Coordenador', auxLabel: 'Ministros Auxiliares', memberLabel: 'Ministros (MESCE)' }
 };
 
 // In-memory state synced with Firestore

@@ -19,5 +19,5 @@ Este bot conecta diretamente o **Firebase Firestore** do site ao **WhatsApp** us
    npm start
    ```
 3. Escaneie o **QR Code** que aparecerá no terminal com o WhatsApp da Paróquia/Pastoral (Aparelhos Conectados).
-4. No painel Admin do site, acesse a aba **Chatbot** e ative o bot no setor desejado (`Coroinhas`, `Música`, `Liturgia` ou `MECE`).
+4. No painel Admin do site, acesse a aba **Chatbot** e ative o bot no setor desejado (`Coroinhas`, `Música`, `Liturgia` ou `MESCE`).
 

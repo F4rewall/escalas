@@ -127,7 +127,7 @@ export default function PublicHome({ setActiveTab }) {
     {
       id: 'mece',
       tabId: 'schedules-mece',
-      title: 'Escala dos MECE',
+      title: 'Escala dos MESCE',
       subtitle: 'Ministros Extraordinários da Sagrada Comunhão',
       icon: HeartHandshake,
       color: '#f43f5e',
@@ -287,7 +287,7 @@ export default function PublicHome({ setActiveTab }) {
             Escalas Paroquiais • Santo Antônio
           </h1>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
-            Acompanhe na página principal todas as escalas lançadas pelos setores de <strong>Coroinhas</strong>, <strong>Música</strong>, <strong>Liturgia</strong> e <strong>MECE</strong>, ou acesse cada pastoral diretamente pelo menu superior.
+            Acompanhe na página principal todas as escalas lançadas pelos setores de <strong>Coroinhas</strong>, <strong>Música</strong>, <strong>Liturgia</strong> e <strong>MESCE</strong>, ou acesse cada pastoral diretamente pelo menu superior.
           </p>
         </div>
       </div>

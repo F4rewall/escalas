@@ -130,7 +130,7 @@ export default function ChatbotConfig() {
     };
     const ok = await saveBotConfig('global', cleanPayload);
     if (ok) {
-      setSavedNotice('Configuração Geral do Chatbot salva! Ela funciona automaticamente para Coroinhas, Música, Liturgia e MECE.');
+      setSavedNotice('Configuração Geral do Chatbot salva! Ela funciona automaticamente para Coroinhas, Música, Liturgia e MESCE.');
       setTimeout(() => setSavedNotice(''), 4500);
     } else {
       alert('Erro ao salvar configurações no banco de dados.');
@@ -250,7 +250,7 @@ export default function ChatbotConfig() {
         <div>
           <h2 className="section-title">Central do Chatbot (Usuário: chat)</h2>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-            Configure aqui o funcionamento geral do Chatbot de WhatsApp para <strong>todos os setores</strong> (Coroinhas, Música, Liturgia e MECE), adaptando automaticamente conforme a escala de cada um.
+            Configure aqui o funcionamento geral do Chatbot de WhatsApp para <strong>todos os setores</strong> (Coroinhas, Música, Liturgia e MESCE), adaptando automaticamente conforme a escala de cada um.
           </p>
         </div>
 

@@ -13,7 +13,7 @@ const SECTOR_BASES = [
   { id: 'coroinhas', name: 'Coroinhas', mainRoleTitle: 'Cerimoniário Principal' },
   { id: 'musica', name: 'Música', mainRoleTitle: 'Responsável Musical' },
   { id: 'liturgia', name: 'Liturgia', mainRoleTitle: 'Coordenador / Comentarista' },
-  { id: 'mece', name: 'MECE', mainRoleTitle: 'Ministro Coordenador' }
+  { id: 'mece', name: 'MESCE', mainRoleTitle: 'Ministro Coordenador' }
 ];
 
 /**

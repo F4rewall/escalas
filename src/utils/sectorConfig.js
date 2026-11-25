@@ -109,19 +109,19 @@ export const SECTORS = {
   },
   mece: {
     id: 'mece',
-    name: 'MECE',
+    name: 'MESCE',
     fullName: 'Ministros Extraordinários da Sagrada Comunhão',
-    scheduleTitle: 'Escalas dos MECE',
+    scheduleTitle: 'Escalas dos MESCE',
     scheduleSubtitle: 'Acompanhe ou organize os Ministros Extraordinários da Sagrada Comunhão nas celebrações.',
-    profilesTitle: 'Perfis dos Ministros (MECE)',
+    profilesTitle: 'Perfis dos Ministros (MESCE)',
     profilesSubtitle: 'Lista completa de Ministros Extraordinários da Sagrada Comunhão e Coordenadores. Clique em um perfil para ver a frequência.',
     memberSingular: 'Ministro',
     memberPlural: 'Ministros',
-    adminBadge: 'Admin • MECE',
+    adminBadge: 'Admin • MESCE',
     accentColor: '#f43f5e',
     secondaryColor: '#eab308',
-    pdfHeaderSubtitle: 'ESCALA DOS MINISTROS EXTRAORDINÁRIOS DA SAGRADA COMUNHÃO • MECE',
-    pdfFooter: 'Paróquia Santo Antônio de Lisboa • Arquidiocese de Palmas • Pastoral dos MECE',
+    pdfHeaderSubtitle: 'ESCALA DOS MINISTROS EXTRAORDINÁRIOS DA SAGRADA COMUNHÃO • MESCE',
+    pdfFooter: 'Paróquia Santo Antônio de Lisboa • Arquidiocese de Palmas • Pastoral dos MESCE',
     mainRoleLabel: 'Ministro Coordenador da Celebração',
     mainRoleSelectPlaceholder: 'Selecione o Ministro Coordenador...',
     mainRoleShortLabel: 'Coordenador / Auxiliares',
@@ -130,18 +130,18 @@ export const SECTORS = {
     auxRoleSectionTitle: 'Selecionar Ministros Auxiliares (Purificação / Âmbula)',
     auxRoleLabel: 'Ministros Auxiliares',
     auxRoleBadge: 'MA',
-    memberRoleSectionTitle: 'Selecionar Ministros da Eucaristia (MECE)',
-    memberRoleLabel: 'Ministros (MECE)',
+    memberRoleSectionTitle: 'Selecionar Ministros da Eucaristia (MESCE)',
+    memberRoleLabel: 'Ministros (MESCE)',
     memberRoleBadge: 'ME',
     categories: [
-      { id: 'ministro', label: 'Ministro(a) (MECE)', plural: 'Ministros (MECE)', badgeClass: 'badge-mece-ministro', shortBadge: 'ME', color: '#f43f5e' },
+      { id: 'ministro', label: 'Ministro(a) (MESCE)', plural: 'Ministros (MESCE)', badgeClass: 'badge-mece-ministro', shortBadge: 'ME', color: '#f43f5e' },
       { id: 'ministro_auxiliar', label: 'Ministro Auxiliar', plural: 'Ministros Auxiliares', badgeClass: 'badge-mece-aux', shortBadge: 'MA', color: '#a855f7' },
-      { id: 'coordenador_mece', label: 'Coordenador(a) MECE', plural: 'Coordenadores MECE', badgeClass: 'badge-cerimoniario', shortBadge: 'MC', color: '#eab308' }
+      { id: 'coordenador_mece', label: 'Coordenador(a) MESCE', plural: 'Coordenadores MESCE', badgeClass: 'badge-cerimoniario', shortBadge: 'MC', color: '#eab308' }
     ],
     mainEligibleCategories: ['coordenador_mece', 'ministro_auxiliar', 'ministro'],
     auxEligibleCategories: ['ministro_auxiliar', 'coordenador_mece'],
     memberEligibleCategories: ['ministro'],
-    emptySelectionAlert: 'Selecione pelo menos um ministro (coordenador, auxiliar ou MECE).'
+    emptySelectionAlert: 'Selecione pelo menos um ministro (coordenador, auxiliar ou MESCE).'
   }
 };
 
