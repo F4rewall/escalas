@@ -113,6 +113,28 @@ export async function ensureFirestoreBase(db, siteUrlFallback = 'http://localhos
     });
   }
 
+  // 4b. Pre-seed whatsapp_contacts for any existing parish_requests so names are remembered immediately
+  const existingContactsSnap = await getDocs(collection(db, 'whatsapp_contacts'));
+  if (existingContactsSnap.empty) {
+    const parishReqsSnap = await getDocs(collection(db, 'parish_requests'));
+    for (const d of parishReqsSnap.docs) {
+      const pr = d.data();
+      const digits = String(pr.requesterPhone || '').replace(/\D/g, '');
+      if (digits && pr.requesterName) {
+        await setDoc(
+          doc(db, 'whatsapp_contacts', digits),
+          {
+            phone: digits,
+            name: pr.requesterName,
+            recentRequests: [`${pr.type}: ${pr.details || pr.preferredDate || ''}`.slice(0, 100)],
+            updatedAt: nowIso
+          },
+          { merge: true }
+        );
+      }
+    }
+  }
+
   // 5. Base collection check for system_requests (keep real incomplete summary if empty)
   const sysReqSnap = await getDocs(collection(db, 'system_requests'));
   const serversSnap = await getDocs(collection(db, 'servers'));

@@ -17,6 +17,7 @@ service cloud.firestore {
     match /system_requests/{docId} { allow read, write: if true; }
     match /parish_requests/{docId} { allow read, write: if true; }
     match /swap_requests/{docId} { allow read, write: if true; }
+    match /whatsapp_contacts/{docId} { allow read, write: if true; }
   }
 }
 

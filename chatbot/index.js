@@ -46,6 +46,8 @@ let serversMap = new Map();
 let schedulesList = [];
 let botConfigsMap = new Map();
 let swapRequestsList = [];
+let whatsappContactsMap = new Map();
+let parishRequestsList = [];
 
 let sock = null;
 let isWaConnected = false;
@@ -136,7 +138,12 @@ async function sendWhatsAppMessage(phone, text) {
   if (!jid) {
     throw new Error(`Número inválido para WhatsApp: ${phone}`);
   }
-  await sock.sendMessage(jid, { text: stripMarkdown(text) });
+  const cleanText = stripMarkdown(text);
+  await sock.sendMessage(jid, { text: cleanText });
+  const digits = normalizeDigits(phone);
+  if (digits) {
+    appendContactHistory(digits, [{ role: 'model', text: cleanText }]).catch(() => {});
+  }
   return jid;
 }
 
@@ -255,6 +262,107 @@ async function saveParishRequest({ type, requesterName, requesterPhone, preferre
   });
 }
 
+// --- Persistent Contact Memory & Conversation History (remembers names, info & past chats across restarts) ---
+const MAX_PERSISTED_HISTORY = 24;
+
+function findContactMemory(senderDigits) {
+  if (!senderDigits) return null;
+  if (whatsappContactsMap.has(senderDigits)) {
+    return whatsappContactsMap.get(senderDigits);
+  }
+  const last8 = senderDigits.length >= 8 ? senderDigits.slice(-8) : senderDigits;
+  for (const contact of whatsappContactsMap.values()) {
+    const cDigits = normalizeDigits(contact.phone);
+    if (cDigits && ((senderDigits.length >= 8 && cDigits.slice(-8) === last8) || cDigits === senderDigits)) {
+      return contact;
+    }
+  }
+  // Fallback: check parish_requests for historical name
+  const prevReq = parishRequestsList.find((r) => {
+    const rDigits = normalizeDigits(r.requesterPhone);
+    return rDigits && ((senderDigits.length >= 8 && rDigits.slice(-8) === last8) || rDigits === senderDigits);
+  });
+  if (prevReq) {
+    return {
+      phone: senderDigits,
+      name: prevReq.requesterName || '',
+      recentRequests: [`${prevReq.type}: ${prevReq.details || prevReq.preferredDate || ''}`.slice(0, 100)],
+      conversationHistory: []
+    };
+  }
+  return null;
+}
+
+async function upsertContactMemory(senderDigits, patch = {}) {
+  if (!senderDigits) return;
+  const existing = findContactMemory(senderDigits) || {};
+  const docId = existing.id || existing.phone || senderDigits;
+  const merged = {
+    ...existing,
+    ...patch,
+    id: docId,
+    phone: existing.phone || senderDigits,
+    updatedAt: new Date().toISOString()
+  };
+  whatsappContactsMap.set(docId, merged);
+  try {
+    await setDoc(doc(db, 'whatsapp_contacts', docId), merged, { merge: true });
+  } catch (err) {
+    console.warn('Erro ao salvar memoria do contato:', err.message);
+  }
+}
+
+async function appendContactHistory(senderDigits, newTurns = [], extraPatch = {}) {
+  if (!senderDigits || !Array.isArray(newTurns) || newTurns.length === 0) return;
+  const existing = findContactMemory(senderDigits) || {};
+  const prevList = Array.isArray(existing.conversationHistory) ? existing.conversationHistory : [];
+  const normalizedNew = newTurns
+    .filter((t) => t && t.text && String(t.text).trim())
+    .map((t) => ({
+      role: t.role === 'model' ? 'model' : 'user',
+      text: stripMarkdown(String(t.text)).slice(0, 500),
+      at: t.at || new Date().toISOString(),
+      ...(t.topic ? { topic: String(t.topic).slice(0, 80) } : {})
+    }));
+  if (normalizedNew.length === 0) return;
+
+  const updatedHistory = [...prevList, ...normalizedNew].slice(-MAX_PERSISTED_HISTORY);
+  await upsertContactMemory(senderDigits, {
+    ...extraPatch,
+    conversationHistory: updatedHistory,
+    lastInteractionAt: normalizedNew[normalizedNew.length - 1].at
+  });
+}
+
+function hydrateSessionFromMemory(session, contactMemory) {
+  if (!session || session._hydratedFromDb) return;
+  session._hydratedFromDb = true;
+  const saved = Array.isArray(contactMemory?.conversationHistory) ? contactMemory.conversationHistory : [];
+  if (session.history.length === 0 && saved.length > 0) {
+    session.history = saved.slice(-MAX_PERSISTED_HISTORY).map((item) => ({
+      role: item.role === 'model' ? 'model' : 'user',
+      parts: [{ text: item.text }],
+      at: item.at || ''
+    }));
+  }
+}
+
+async function replyAndTrack(remoteJid, senderDigits, text, { recordText = null, topic = '' } = {}) {
+  const cleanText = stripMarkdown(text);
+  await replyDirect(remoteJid, cleanText);
+  const session = getSession(remoteJid);
+  const savedBotText = stripMarkdown(recordText || cleanText).slice(0, 500);
+  if (savedBotText) {
+    session.history.push({ role: 'model', parts: [{ text: savedBotText }], at: new Date().toISOString() });
+    if (session.history.length > MAX_PERSISTED_HISTORY * 2) {
+      session.history = session.history.slice(-MAX_PERSISTED_HISTORY);
+    }
+    if (senderDigits) {
+      await appendContactHistory(senderDigits, [{ role: 'model', text: savedBotText, topic }]);
+    }
+  }
+}
+
 async function updateBotHeartbeat(connected, qrDataUrl = '') {
   try {
     await setDoc(doc(db, 'bot_status', 'main'), {
@@ -268,8 +376,379 @@ async function updateBotHeartbeat(connected, qrDataUrl = '') {
   }
 }
 
+// --- Response Validation & Guidance Filter ---
+const NON_NAME_WORDS = new Set([
+  // Animais
+  'cachorro', 'cachorra', 'cao', 'cadela', 'gato', 'gata', 'gatinho', 'gatinha', 'papagaio', 'passaro', 'passarinho',
+  'cavalo', 'egua', 'burro', 'jumento', 'mula', 'vaca', 'boi', 'touro', 'bezerro', 'porco', 'porca', 'leitao',
+  'galinha', 'galo', 'pinto', 'pato', 'ganso', 'peru', 'macaco', 'leao', 'tigre', 'onca', 'elefante', 'girafa',
+  'hipopotamo', 'zebra', 'urso', 'lobo', 'raposa', 'coelho', 'coelha', 'rato', 'ratazana', 'hamster', 'cobra',
+  'serpente', 'jacare', 'crocodilo', 'tartaruga', 'sapo', 'ra', 'peixe', 'tubarao', 'baleia', 'golfinho', 'pombo',
+  'pomba', 'coruja', 'aguia', 'falcao', 'formiga', 'abelha', 'barata', 'mosca', 'mosquito', 'aranha', 'dinossauro',
+  'bicho', 'animal', 'pet', 'dog', 'cat',
+  // Objetos, comida e aleatoriedades comuns em testes
+  'mesa', 'cadeira', 'sofa', 'cama', 'porta', 'janela', 'parede', 'teto', 'chao', 'casa', 'predio', 'apartamento',
+  'carro', 'moto', 'onibus', 'caminhao', 'bicicleta', 'aviao', 'barco', 'celular', 'telefone', 'computador', 'notebook',
+  'teclado', 'mouse', 'monitor', 'televisao', 'tv', 'geladeira', 'fogao', 'microondas', 'ventilador', 'ar', 'sapato',
+  'tenis', 'chinelo', 'sandalia', 'roupa', 'camisa', 'camiseta', 'calca', 'short', 'vestido', 'blusa', 'boné', 'bone',
+  'bola', 'livro', 'caderno', 'caneta', 'lapis', 'borracha', 'papel', 'pedra', 'madeira', 'ferro', 'agua', 'fogo',
+  'terra', 'arroz', 'feijao', 'carne', 'frango', 'pao', 'bolo', 'bolacha', 'biscoito', 'banana', 'maca', 'laranja',
+  'uva', 'melancia', 'abacaxi', 'morango', 'manga', 'limao', 'batata', 'tomate', 'cebola', 'alho', 'sal', 'acucar',
+  'cafe', 'leite', 'suco', 'refrigerante', 'cerveja', 'vinho', 'pizza', 'hamburguer', 'lanche', 'pastel', 'coxinha',
+  'sorvete', 'chocolate', 'doce', 'bala', 'chiclete', 'pipoca', 'queijo', 'ovo', 'macarrao',
+  // Termos de teste, saudações, negações, opções e palavras ofensivas
+  'teste', 'testando', 'test', 'exemplo', 'fulano', 'beltrano', 'ciclano', 'anonimo', 'usuario', 'ninguem', 'nada',
+  'tudo', 'coisa', 'negocio', 'trem', 'nao', 'sim', 'talvez', 'ok', 'blz', 'beleza', 'certo', 'sei', 'naosei',
+  'desconhecido', 'qualquer', 'tanto', 'faz', 'menu', 'voltar', 'cancelar', 'sair', 'inicio', 'ajuda', 'start',
+  'oi', 'ola', 'eai', 'fala', 'bom', 'boa', 'dia', 'tarde', 'noite', 'obrigado', 'obrigada', 'valeu', 'pfv',
+  'dizimo', 'dizimos', 'confissao', 'batismo', 'batismos', 'reuniao', 'reunioes', 'doacao', 'doacoes', 'escala',
+  'escalas', 'outros', 'outro', 'igreja', 'paroquia', 'capela', 'padre', 'pix', 'cadastro', 'dinheiro', 'valor',
+  'bosta', 'merda', 'porra', 'caralho', 'idiota', 'otario', 'palhaco', 'lixo', 'besta', 'feio', 'chato', 'troll',
+  'batman', 'superman', 'homem', 'aranha', 'goku', 'naruto', 'pikachu', 'shrek', 'mickey', 'donald', 'bob', 'esponja',
+  'asdf', 'qwer', 'zxcv', 'aaaa', 'bbbb', 'kkkk', 'haha', 'hehe', 'rsrs', 'xxx', 'zzz'
+]);
+
+const GIBBERISH_VOWEL_EXEMPT = new Set(['pix', 'sms', 'cep', 'cpf', 'rg', 'rj', 'sp', 'to', 'mg', 'ba', 'pr', 'rs', 'go', 'df', 'ok']);
+
+function normalizeForFilter(text = '') {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isKeyboardSmashOrGibberish(normText = '') {
+  if (!normText || normText.length < 2) return true;
+  if (/^(.)\1{2,}$/.test(normText.replace(/\s/g, ''))) return true;
+  if (/(.)\1{3,}/.test(normText)) return true;
+  const words = normText.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const lettersOnly = normText.replace(/[^a-z]/g, '');
+  if (lettersOnly.length === 0) return true;
+
+  // Check if all alphabetic tokens lack vowels (e.g., "sdfgh", "xzcv")
+  const alphaWords = words.map((w) => w.replace(/[^a-z]/g, '')).filter(Boolean);
+  if (alphaWords.length > 0 && alphaWords.every((w) => w.length >= 3 && !/[aeiou]/.test(w) && !GIBBERISH_VOWEL_EXEMPT.has(w))) {
+    return true;
+  }
+  if (/^(asdf|qwer|zxcv|hjkl|yuio|abcd|1234|kkkk|haha|hehe|rsrs)+$/.test(lettersOnly)) {
+    return true;
+  }
+  if (/(asdf|qwer|zxcv|sdfg|dfgh|fghj|ghjk|hjkl|wert|erty|rtyu|tyui|uiop)/i.test(lettersOnly)) {
+    return true;
+  }
+  if (alphaWords.some((w) => /[bcdfghjklmnpqrstvwxyz]{5,}/.test(w))) {
+    return true;
+  }
+  return false;
+}
+
+function toTitleCasePtBr(name = '') {
+  const preps = new Set(['da', 'de', 'do', 'das', 'dos', 'e']);
+  return String(name || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((word, idx) => {
+      const lower = word.toLowerCase();
+      if (idx > 0 && preps.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+function stripNamePrefixes(raw = '') {
+  return String(raw || '')
+    .trim()
+    .replace(/^(?:ola|oi|bom dia|boa tarde|boa noite|paz de cristo)[,!.\s]*/i, '')
+    .replace(/^(?:o\s+)?(?:meu\s+nome\s+(?:completo\s+)?[eé]|eu\s+me\s+chamo|me\s+chamo|pode\s+me\s+chamar\s+de|eu\s+sou\s+(?:o|a)?|sou\s+(?:o|a)?|aqui\s+[eé]\s+(?:o|a)?)\s+/i, '')
+    .replace(/[.!?,;:"'()]+$/g, '')
+    .trim();
+}
+
+function runDeterministicFilter(expectedType, rawText, context = {}) {
+  const trimmed = String(rawText || '').trim();
+  const norm = normalizeForFilter(trimmed);
+  const label = context.label || 'atendimento';
+
+  if (expectedType === 'person_name') {
+    const cleanedRaw = stripNamePrefixes(trimmed);
+    const cleanedNorm = normalizeForFilter(cleanedRaw);
+
+    if (!cleanedNorm || cleanedNorm.length < 2) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 Esse texto está muito curto para ser um nome.\n\n` +
+          `Para continuarmos com o atendimento de ${label}, informe o seu nome completo.\n` +
+          `Exemplo: Maria Aparecida da Silva\n\n` +
+          `(Se quiser voltar às opções, digite "menu".)`
+      };
+    }
+
+    if (/\d/.test(cleanedRaw) || /https?:\/\/|@/.test(cleanedRaw)) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 Números ou símbolos não fazem parte do nome.\n\n` +
+          `Por favor, escreva apenas o seu nome completo com letras.\n` +
+          `Exemplo: João Pedro Oliveira\n\n` +
+          `(Ou digite "menu" para voltar.)`
+      };
+    }
+
+    if (isKeyboardSmashOrGibberish(cleanedNorm)) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 Não consegui identificar um nome válido em "${trimmed}".\n\n` +
+          `Escreva o seu nome e sobrenome normalmente para que a equipe identifique você.\n` +
+          `Exemplo: Ana Paula Ferreira`
+      };
+    }
+
+    const tokens = cleanedNorm.split(/\s+/).filter(Boolean);
+    const nonNameHit = tokens.find((t) => NON_NAME_WORDS.has(t));
+    if (nonNameHit || /^(nao sei|sei la|nao tenho|tanto faz|qualquer um|sem nome)$/i.test(cleanedNorm)) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 Notei que "${trimmed}" não parece ser o seu nome de pessoa.\n\n` +
+          `Para registrarmos seu atendimento de ${label} corretamente, digite apenas o seu nome completo.\n` +
+          `Exemplo: Maria Aparecida da Silva\n\n` +
+          `(Se preferir cancelar e voltar ao início, digite "menu".)`
+      };
+    }
+
+    if (tokens.some((t) => t.length === 1 && t !== 'e') && tokens.length === 1) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 Precisamos do seu nome completo (e não apenas uma letra).\n\n` +
+          `Exemplo: José Carlos Santos`
+      };
+    }
+
+    if (tokens.length > 6 || cleanedRaw.includes('?')) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 Agora estou aguardando apenas o seu nome completo antes de continuarmos.\n\n` +
+          `Digite só o seu nome e sobrenome, como no exemplo:\n` +
+          `Exemplo: Fernanda Costa Lima\n\n` +
+          `(Se quiser perguntar outra coisa antes, digite "menu".)`
+      };
+    }
+
+    return {
+      valid: true,
+      needsAiCheck: true,
+      normalizedValue: toTitleCasePtBr(cleanedRaw)
+    };
+  }
+
+  if (expectedType === 'phone') {
+    const digits = normalizeDigits(trimmed);
+    if (digits.length < 8) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 "${trimmed}" não possui dígitos suficientes de um telefone.\n\n` +
+          `Digite apenas o seu número de WhatsApp/celular com DDD (8 a 11 números).\n` +
+          `Exemplo: 63999998888\n\n` +
+          `(Ou digite "menu" para voltar.)`
+      };
+    }
+    return { valid: true, needsAiCheck: false, normalizedValue: digits };
+  }
+
+  if (expectedType === 'swap_reason') {
+    const tokens = norm.split(/\s+/).filter(Boolean);
+    const trivialAnswers = new Set(['sim', 'nao', 'ok', 'blz', 'beleza', 'tudo bem', 'nada', 'sei la', 'nao sei', 'teste']);
+    if (
+      trimmed.length < 4 ||
+      isKeyboardSmashOrGibberish(norm) ||
+      trivialAnswers.has(norm) ||
+      (tokens.length === 1 && NON_NAME_WORDS.has(tokens[0]))
+    ) {
+      return {
+        valid: false,
+        needsAiCheck: false,
+        helpMessage:
+          `Paz de Cristo! 🙏 Esse motivo ("${trimmed}") ficou muito vago ou inválido para enviar aos colegas da escala.\n\n` +
+          `Escreva rapidamente o motivo real da troca para que todos entendam.\n` +
+          `Exemplos:\n` +
+          `- Preciso viajar com minha família neste dia\n` +
+          `- Estarei no trabalho neste horário\n` +
+          `- Tive um imprevisto de saúde\n\n` +
+          `(Ou digite "menu" para cancelar.)`
+      };
+    }
+    return { valid: true, needsAiCheck: true, normalizedValue: trimmed };
+  }
+
+  if (expectedType === 'parish_details') {
+    const type = context.type || 'outros';
+    const tokens = norm.split(/\s+/).filter(Boolean);
+
+    // Allow concise valid intents on dizimo/doacao
+    const shortAllowed = type === 'dizimo' && /^(pix|chave pix|cadastro|quero cadastro|atualizar|boleto)$/i.test(norm);
+    if (!shortAllowed) {
+      const trivial = new Set(['sim', 'nao', 'ok', 'blz', 'beleza', 'oi', 'ola', 'nada', 'nao sei', 'sei la', 'tanto faz', 'teste']);
+      if (
+        trimmed.length < 3 ||
+        isKeyboardSmashOrGibberish(norm) ||
+        trivial.has(norm) ||
+        (tokens.length === 1 && NON_NAME_WORDS.has(tokens[0]))
+      ) {
+        const examplesByType = {
+          batismo: `Exemplo: Criança: Lucas Gabriel • Pais: Maria e José • Data pretendida: 15/12`,
+          confissao: `Exemplo: Gostaria de confessar na sexta-feira às 16h (ou sábado pela manhã)`,
+          direcao_espiritual: `Exemplo: Gostaria de conversar com o padre na quinta-feira à tarde`,
+          reuniao: `Exemplo: Reunião sobre a pastoral na terça-feira às 19h30`,
+          dizimo: `Exemplos:\n- Quero fazer meu cadastro de dizimista\n- Gostaria da chave PIX do Dízimo`,
+          doacao: `Exemplo: Quero doar alimentos não perecíveis (ou fazer oferta em dinheiro)`,
+          outros: `Exemplo: Gostaria de saber os horários da secretaria ou tirar uma dúvida sobre a missa`
+        };
+        return {
+          valid: false,
+          needsAiCheck: false,
+          helpMessage:
+            `Paz de Cristo! 🙏 Não consegui aproveitar a resposta "${trimmed}" para o seu pedido de ${label}.\n\n` +
+            `Por favor, escreva com mais clareza o que você precisa para que a equipe paroquial possa atender você:\n` +
+            `${examplesByType[type] || examplesByType.outros}\n\n` +
+            `(Ou digite "menu" para voltar.)`
+        };
+      }
+    }
+    return { valid: true, needsAiCheck: true, normalizedValue: trimmed };
+  }
+
+  return { valid: true, needsAiCheck: false, normalizedValue: trimmed };
+}
+
+async function evaluateUserResponse(expectedType, rawText, context = {}) {
+  const det = runDeterministicFilter(expectedType, rawText, context);
+  if (!det.valid) {
+    return det;
+  }
+  if (!det.needsAiCheck) {
+    return det;
+  }
+
+  const cfg = getSectorConfig('global');
+  const apiKey = (cfg.geminiApiKey || '').trim();
+  if (!apiKey || apiKey.length < 20) {
+    return det;
+  }
+
+  const fieldDescriptions = {
+    person_name: `Nome de uma pessoa física para cadastro/atendimento paroquial de "${context.label || 'Paróquia'}". Aceite nomes reais brasileiros ou estrangeiros (mesmo que seja só o primeiro nome ou nome composto). REJEITE animais (cachorro, gato, etc.), objetos, comidas, personagens fictícios (homem aranha, goku), palavras de teste, xingamentos, frases sem sentido ou perguntas no lugar do nome.`,
+    swap_reason: `Motivo real de um servidor da igreja para pedir substituição/troca de escala (ex: viagem, trabalho, doença, prova, compromisso familiar). REJEITE piadas, palavras aleatórias, animais, comidas ou respostas sem sentido.`,
+    parish_details: `Informação/solicitação do usuário para o serviço paroquial "${context.label || context.type}". REJEITE piadas, animais aleatórios ("cachorro"), comidas sem contexto, frases desconexas ou respostas que não ajudam a equipe paroquial a entender o pedido. (Para Dízimo, pedidos curtos como "quero o pix" ou "cadastro" SÃO VÁLIDOS.)`
+  };
+
+  const evaluatorPrompt =
+    `Você é um filtro validador gentil do Assistente Virtual da Paróquia Santo Antônio (WhatsApp).\n` +
+    `Avalie se a resposta do usuário faz sentido para o campo pedido.\n\n` +
+    `CAMPO ESPERADO: ${fieldDescriptions[expectedType] || expectedType}\n` +
+    `RESPOSTA DO USUÁRIO: "${String(rawText || '').trim()}"\n\n` +
+    `Responda EXCLUSIVAMENTE em JSON válido neste formato:\n` +
+    `{\n` +
+    `  "valid": true ou false,\n` +
+    `  "normalizedValue": "valor limpo se válido (para nome, mantenha capitalização correta sem prefixos como 'meu nome é')",\n` +
+    `  "helpMessage": "se valid=false, escreva uma mensagem acolhedora começando com Paz de Cristo! explicando por que não parece válido e dando 1 ou 2 exemplos claros de como escrever corretamente. NUNCA use asteriscos (*) nem sublinhados (_)."\n` +
+    `}`;
+
+  const models = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
+  for (const model of models) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: evaluatorPrompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json'
+            }
+          }),
+          signal: AbortSignal.timeout(8000)
+        }
+      );
+      if (!resp.ok) continue;
+      const json = await resp.json();
+      const rawJson = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawJson) continue;
+      const parsed = JSON.parse(rawJson);
+      if (typeof parsed.valid === 'boolean') {
+        if (!parsed.valid) {
+          return {
+            valid: false,
+            helpMessage: stripMarkdown(
+              parsed.helpMessage ||
+                `Paz de Cristo! 🙏 Não consegui validar essa resposta. Por favor, tente escrever novamente de forma clara ou digite "menu" para voltar.`
+            )
+          };
+        }
+        return {
+          valid: true,
+          normalizedValue: (parsed.normalizedValue || det.normalizedValue || rawText).trim()
+        };
+      }
+    } catch {
+      // fallback safely to deterministic result
+    }
+  }
+  return det;
+}
+
 // --- Gemini AI Helper (Assistente Virtual da Paróquia Santo Antônio) ---
-async function callGeminiAssistant(session, userText) {
+function buildGeminiContents(history = [], currentUserText = '') {
+  const recent = (Array.isArray(history) ? history : []).slice(-16);
+  const turns = [];
+
+  for (const item of recent) {
+    const role = item?.role === 'model' ? 'model' : 'user';
+    const txt = String(item?.parts?.[0]?.text || item?.text || '').trim();
+    if (!txt) continue;
+    if (turns.length > 0 && turns[turns.length - 1].role === role) {
+      turns[turns.length - 1].parts[0].text += `\n${txt}`;
+    } else {
+      turns.push({ role, parts: [{ text: txt }] });
+    }
+  }
+
+  // Gemini expects the conversation sequence to start with 'user'
+  while (turns.length > 0 && turns[0].role === 'model') {
+    turns.shift();
+  }
+
+  const cleanCurrent = String(currentUserText || '').trim();
+  if (cleanCurrent) {
+    const last = turns[turns.length - 1];
+    if (!last || last.role !== 'user') {
+      turns.push({ role: 'user', parts: [{ text: cleanCurrent }] });
+    } else if (last.parts[0].text !== cleanCurrent && !last.parts[0].text.endsWith(cleanCurrent)) {
+      last.parts[0].text += `\n${cleanCurrent}`;
+    }
+  }
+
+  return turns;
+}
+
+async function callGeminiAssistant(session, userText, personContext = '') {
   const cfg = getSectorConfig('global');
   const apiKey = (cfg.geminiApiKey || '').trim();
   if (!apiKey || apiKey.length < 20) return null;
@@ -284,8 +763,10 @@ async function callGeminiAssistant(session, userText) {
     `REGRAS IMPORTANTES: NUNCA use asteriscos (* ou **) nem sublinhados (_) na resposta; escreva texto limpo sem markdown. ` +
     `Você auxilia os fiéis e servidores tanto sobre fé católica, sacramentos, orações, liturgia e serviços da Paróquia Santo Antônio (Confissões, Direção Espiritual, Batismos, Reuniões, Dízimos, Doações, Escalas), quanto em quaisquer outras dúvidas gerais úteis que trouxerem, sempre dentro dos valores cristãos. ` +
     `Horários das comunidades da paróquia: ${chapelsSummary || 'Paróquia Santo Antônio'}. ` +
-    `Confissões: ${cfg.confessionScheduleInfo}. Dízimo: ${cfg.dizimoInfo}. Doações: ${cfg.doacoesInfo}.`;
+    `Confissões: ${cfg.confessionScheduleInfo}. Dízimo: ${cfg.dizimoInfo}. Doações: ${cfg.doacoesInfo}.` +
+    (personContext ? `\n\nDADOS E CONVERSAS ANTERIORES JÁ LEMBRADAS DESTE CONTATO (use com naturalidade, demonstre continuidade e nunca peça de novo o que já sabe):\n${personContext}` : '');
 
+  const contents = buildGeminiContents(session?.history || [], userText);
   const models = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-3-flash-preview'];
   for (const model of models) {
     try {
@@ -295,7 +776,7 @@ async function callGeminiAssistant(session, userText) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [...session.history.slice(-8), { role: 'user', parts: [{ text: userText }] }],
+            contents,
             systemInstruction: { parts: [{ text: systemPrompt }] }
           }),
           signal: AbortSignal.timeout(15000)
@@ -745,11 +1226,123 @@ async function checkScheduledNotifications() {
 }
 
 // --- Conversational Menu Builders ---
-function buildWelcomeText(name = '') {
+function formatShortTimePt(iso = '') {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm} ${hh}:${mi}`;
+}
+
+function buildPersonContextSummary(personMatches = [], contactMemory = null) {
+  const name = personMatches[0]?.name || contactMemory?.name || '';
+  const parts = [];
+  if (name) parts.push(`Nome: ${name}`);
+
+  if (personMatches.length > 0) {
+    const roles = personMatches.map((m) => {
+      const secName = (SECTOR_META[m.sector || 'coroinhas'] || SECTOR_META.coroinhas).name;
+      return `${secName} (${m.category || 'servidor'})`;
+    });
+    parts.push(`Setor/Função: ${roles.join(', ')}`);
+    const prefId = personMatches.find((m) => m.preferredChapelId)?.preferredChapelId;
+    if (prefId && chapelsMap.has(prefId)) {
+      parts.push(`Capela preferencial: ${chapelsMap.get(prefId).name}`);
+    }
+    const upcoming = getPersonUpcomingSchedules(personMatches);
+    if (upcoming.length > 0) {
+      const next = upcoming[0];
+      const nextChapel = chapelsMap.get(next.chapelId)?.name || 'Capela';
+      parts.push(`Próxima escala: ${nextChapel} em ${formatBrDate(next.date)} às ${next.time || ''} (${getRoleInSchedule(next, personMatches)})`);
+    }
+  } else if (contactMemory?.sector) {
+    parts.push(`Setor: ${contactMemory.sector}`);
+  }
+
+  if (Array.isArray(contactMemory?.recentRequests) && contactMemory.recentRequests.length > 0) {
+    parts.push(`Últimos atendimentos salvos: ${contactMemory.recentRequests.slice(0, 3).join(' | ')}`);
+  }
+
+  if (Array.isArray(contactMemory?.conversationHistory) && contactMemory.conversationHistory.length > 0) {
+    const recentChat = contactMemory.conversationHistory
+      .slice(-10)
+      .map((entry) => {
+        const who = entry.role === 'model' ? 'Assistente' : (name || 'Contato');
+        const when = entry.at ? `[${formatShortTimePt(entry.at)}] ` : '';
+        return `${when}${who}: ${entry.text}`;
+      })
+      .join('\n');
+    parts.push(`Histórico recente de conversas anteriores:\n${recentChat}`);
+  }
+
+  return parts.join('\n');
+}
+
+function getLastMeaningfulUserTopic(contactMemory = null, currentText = '') {
+  const history = Array.isArray(contactMemory?.conversationHistory) ? contactMemory.conversationHistory : [];
+  const normCurrent = normalizeForFilter(currentText);
+  const twoMinutesAgoMs = Date.now() - 2 * 60 * 1000;
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    const item = history[i];
+    if (item?.role !== 'user' || !item?.text) continue;
+    const clean = item.text.trim();
+    const norm = normalizeForFilter(clean);
+    if (!clean || clean.length <= 2) continue;
+    if (normCurrent && norm === normCurrent) continue;
+    if (item.at) {
+      const itemMs = new Date(item.at).getTime();
+      // Prefer topics from prior conversations (older than 2 minutes) or earlier turns before current message
+      if (!Number.isNaN(itemMs) && itemMs >= twoMinutesAgoMs && i === history.length - 1) continue;
+    }
+    if (/^(oi|ola|bom dia|boa tarde|boa noite|menu|voltar|inicio|cancelar|sair|desistir|parar|sim|nao|ok|\d+)$/.test(norm)) continue;
+    return clean.length > 90 ? `${clean.slice(0, 87)}...` : clean;
+  }
+  return '';
+}
+
+function buildWelcomeText(name = '', personMatches = [], contactMemory = null, currentText = '') {
+  const resolvedName = name || contactMemory?.name || '';
+  const hasSavedHistory = Array.isArray(contactMemory?.conversationHistory) && contactMemory.conversationHistory.length > 1;
+  const isReturning = Boolean(resolvedName || personMatches.length > 0 || contactMemory?.recentRequests?.length || hasSavedHistory);
+
+  if (!isReturning) {
+    return (
+      `Paz de Cristo! 🙏\n\n` +
+      `Seja muito bem-vindo(a) ao canal de atendimento do Assistente Virtual da Paróquia Santo Antônio!\n` +
+      `Aqui você pode marcar atendimentos da paróquia, tirar dúvidas sobre a nossa fé ou consultar suas escalas.`
+    );
+  }
+
+  const infoLines = [];
+  if (personMatches.length > 0) {
+    const roles = personMatches.map((m) => {
+      const secName = (SECTOR_META[m.sector || 'coroinhas'] || SECTOR_META.coroinhas).name;
+      return `${secName} (${m.category || 'servidor'})`;
+    });
+    infoLines.push(`📌 Cadastro: ${roles.join(' | ')}`);
+    const upcoming = getPersonUpcomingSchedules(personMatches);
+    if (upcoming.length > 0) {
+      const next = upcoming[0];
+      infoLines.push(`📅 Próxima escala: ${chapelsMap.get(next.chapelId)?.name || 'Capela'} (${formatBrDate(next.date)} às ${next.time || ''})`);
+    }
+  }
+  if (Array.isArray(contactMemory?.recentRequests) && contactMemory.recentRequests.length > 0) {
+    infoLines.push(`📝 Último registro: ${contactMemory.recentRequests[0]}`);
+  }
+  const lastTopic = getLastMeaningfulUserTopic(contactMemory, currentText);
+  if (lastTopic) {
+    infoLines.push(`💬 Última conversa lembrada: "${lastTopic}"`);
+  }
+
+  const greetingLine = resolvedName ? `Paz de Cristo, ${resolvedName}! 🙏` : `Paz de Cristo! 🙏`;
+  const infoBlock = infoLines.length > 0 ? `\n\n${infoLines.join('\n')}` : '';
   return (
-    `Paz de Cristo${name ? `, ${name}` : ''}! 🙏\n\n` +
-    `Seja muito bem-vindo(a) ao canal de atendimento do Assistente Virtual da Paróquia Santo Antônio!\n` +
-    `Aqui você pode marcar atendimentos da paróquia, tirar dúvidas sobre a nossa fé ou consultar suas escalas.`
+    `${greetingLine}\n\n` +
+    `Que alegria falar com você novamente no canal do Assistente Virtual da Paróquia Santo Antônio!${infoBlock}`
   );
 }
 
@@ -768,10 +1361,12 @@ function buildMainMenuText() {
   );
 }
 
-async function sendWelcomeThenMenu(remoteJid, name = '', session = null) {
-  await replyDirect(remoteJid, buildWelcomeText(name));
+async function sendWelcomeThenMenu(remoteJid, name = '', session = null, personMatches = [], contactMemory = null, senderDigits = '') {
+  await replyDirect(remoteJid, buildWelcomeText(name, personMatches, contactMemory));
   await new Promise((resolve) => setTimeout(resolve, 600));
-  await replyDirect(remoteJid, buildMainMenuText());
+  await replyAndTrack(remoteJid, senderDigits || normalizeDigits(remoteJid.split('@')[0]), buildMainMenuText(), {
+    recordText: '[Enviou boas-vindas e o menu principal com opções 1 a 8]'
+  });
   if (session) {
     session.welcomed = true;
   }
@@ -800,19 +1395,48 @@ async function handleIncomingMessage(msg) {
     ).trim();
     if (!text) return;
 
-    const norm = text
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-
+    const norm = normalizeForFilter(text);
     const senderDigits = normalizeDigits(remoteJid.split('@')[0]);
     const session = getSession(remoteJid);
-    session.history.push({ role: 'user', parts: [{ text }] });
 
-    // Check identity: first explicit phone override in session, otherwise sender WhatsApp number
-    const lookupPhone = session.identifiedPhone || senderDigits;
+    // Load persistent contact memory (including prior conversation history) + match servers
+    let contactMemory = findContactMemory(senderDigits);
+    hydrateSessionFromMemory(session, contactMemory);
+
+    // Record current incoming user message in RAM session + Firestore history
+    session.history.push({ role: 'user', parts: [{ text }], at: new Date().toISOString() });
+    if (session.history.length > MAX_PERSISTED_HISTORY * 2) {
+      session.history = session.history.slice(-MAX_PERSISTED_HISTORY);
+    }
+    await appendContactHistory(senderDigits, [{ role: 'user', text }]);
+    contactMemory = findContactMemory(senderDigits);
+
+    const lookupPhone = session.identifiedPhone || contactMemory?.linkedPhone || senderDigits;
     let personMatches = matchServersByPhone(lookupPhone);
-    let personName = personMatches[0]?.name || '';
+    let personName = personMatches[0]?.name || contactMemory?.name || '';
+
+    // Persist basic server info into contact memory if matched and not yet saved
+    if (personMatches.length > 0) {
+      const primary = personMatches[0];
+      const secName = (SECTOR_META[primary.sector || 'coroinhas'] || SECTOR_META.coroinhas).name;
+      const prefChapelName = primary.preferredChapelId ? (chapelsMap.get(primary.preferredChapelId)?.name || '') : '';
+      if (!contactMemory || contactMemory.name !== primary.name || contactMemory.sector !== secName) {
+        await upsertContactMemory(senderDigits, {
+          remoteJid,
+          name: primary.name,
+          sector: secName,
+          category: primary.category || '',
+          preferredChapel: prefChapelName,
+          linkedPhone: lookupPhone
+        });
+        contactMemory = findContactMemory(senderDigits);
+      }
+    } else if (msg.pushName && !contactMemory?.whatsappPushName) {
+      await upsertContactMemory(senderDigits, {
+        remoteJid,
+        whatsappPushName: msg.pushName
+      });
+    }
 
     // Log inbound message
     await writeBotLog({
@@ -820,7 +1444,7 @@ async function handleIncomingMessage(msg) {
       type: 'chat_inbound',
       direction: 'inbound',
       targetPhone: senderDigits,
-      targetName: personName || senderDigits,
+      targetName: personName || msg.pushName || senderDigits,
       message: text,
       status: 'received'
     });
@@ -835,18 +1459,55 @@ async function handleIncomingMessage(msg) {
         personMatches = matched;
         personName = matched[0].name;
         const sectorsLabel = matched.map((m) => (SECTOR_META[m.sector || 'coroinhas'] || SECTOR_META.coroinhas).name).join(', ');
-        session.step = 'escalas_menu';
-        await replyDirect(
+        await upsertContactMemory(senderDigits, {
           remoteJid,
-          `Paz de Cristo, ${personName}! 🙏 Identifiquei você pelo número (${sectorsLabel}).\n\n` +
-            buildEscalasMenuText(personName)
+          name: personName,
+          linkedPhone: candidatePhone,
+          sector: sectorsLabel,
+          category: matched[0].category || ''
+        });
+        session.step = 'escalas_menu';
+        await replyAndTrack(
+          remoteJid,
+          senderDigits,
+          `Paz de Cristo, ${personName}! 🙏 Identifiquei você pelo número (${sectorsLabel}) e já deixei salvo aqui.\n\n` +
+            buildEscalasMenuText(personName),
+          { topic: 'escalas' }
         );
         return;
       }
-      await replyDirect(
+      await replyAndTrack(
         remoteJid,
-        `Paz de Cristo! Procurei o número informado no sistema, mas ainda não encontrei um cadastro com ele. Peça ao coordenador do seu setor para conferir o número em Perfis.`
+        senderDigits,
+        `Paz de Cristo! Procurei o número informado no sistema, mas ainda não encontrei um cadastro com ele. Confira os dígitos com DDD (ex: 63999998888) ou peça ao coordenador do seu setor para conferir o número em Perfis.`,
+        { topic: 'escalas' }
       );
+      return;
+    }
+
+    // 1b. Detect explicit name introduction (e.g. "meu nome é Maria", "me chamo João") with validation filter
+    const nameIntroMatch = text.match(/(?:meu nome [eé]|me chamo)\s+([^\n!?]{2,60})/i);
+    if (nameIntroMatch && session.step === 'idle') {
+      const nameCheck = await evaluateUserResponse('person_name', nameIntroMatch[1].trim(), { label: 'cadastro' });
+      if (!nameCheck.valid) {
+        await replyAndTrack(remoteJid, senderDigits, nameCheck.helpMessage, { topic: 'validacao_nome' });
+        return;
+      }
+      const introducedName = nameCheck.normalizedValue || nameIntroMatch[1].trim();
+      personName = introducedName;
+      await upsertContactMemory(senderDigits, {
+        remoteJid,
+        name: introducedName
+      });
+      contactMemory = findContactMemory(senderDigits);
+      await replyAndTrack(
+        remoteJid,
+        senderDigits,
+        `Paz de Cristo, ${introducedName}! 🙏 Que alegria te conhecer! Já deixei seu nome guardado aqui para nossos próximos atendimentos.\n\n` +
+          buildMainMenuText(),
+        { recordText: `Apresentou-se como ${introducedName} e recebeu o menu principal.`, topic: 'cadastro_nome' }
+      );
+      session.welcomed = true;
       return;
     }
 
@@ -871,13 +1532,15 @@ async function handleIncomingMessage(msg) {
     }
 
     // 3. Universal Menu/Back shortcut
-    if (norm === 'menu' || norm === 'voltar' || norm === 'inicio' || norm === 'cancelar') {
+    if (/^(menu|voltar|inicio|cancelar|sair|desistir|parar)$/.test(norm)) {
       session.step = 'idle';
       session.data = {};
       if (!session.welcomed) {
-        await sendWelcomeThenMenu(remoteJid, personName, session);
+        await sendWelcomeThenMenu(remoteJid, personName, session, personMatches, contactMemory, senderDigits);
       } else {
-        await replyDirect(remoteJid, buildMainMenuText());
+        await replyAndTrack(remoteJid, senderDigits, buildMainMenuText(), {
+          recordText: '[Voltou para o menu principal]'
+        });
       }
       return;
     }
@@ -905,9 +1568,11 @@ async function handleIncomingMessage(msg) {
             botSwapStatus: 'confirmed',
             botSwapReply: text
           });
-          await replyDirect(
+          await replyAndTrack(
             remoteJid,
-            `Perfeito, ${personName}! 🙏\n\nEscala de ${chapelName} (${formatBrDate(waitingSchedule.date)}) confirmada sem trocas.\n\nNo dia e horário da celebração enviarei o código do relatório por aqui. Deus abençoe!`
+            senderDigits,
+            `Perfeito, ${personName}! 🙏\n\nEscala de ${chapelName} (${formatBrDate(waitingSchedule.date)}) confirmada sem trocas.\n\nNo dia e horário da celebração enviarei o código do relatório por aqui. Deus abençoe!`,
+            { topic: 'escalas' }
           );
           return;
         }
@@ -919,9 +1584,11 @@ async function handleIncomingMessage(msg) {
             botSwapStatus: 'swap_reported',
             botSwapReply: text
           });
-          await replyDirect(
+          await replyAndTrack(
             remoteJid,
-            `Anotado, ${personName}! ✅\n\nRegistrei seu aviso sobre ${chapelName} (${formatBrDate(waitingSchedule.date)}) e avisei a coordenação.`
+            senderDigits,
+            `Anotado, ${personName}! ✅\n\nRegistrei seu aviso sobre ${chapelName} (${formatBrDate(waitingSchedule.date)}) e avisei a coordenação.`,
+            { topic: 'escalas' }
           );
           if (cfg.notifyAdminPhone && normalizeDigits(cfg.notifyAdminPhone).length >= 10) {
             try {
@@ -938,58 +1605,112 @@ async function handleIncomingMessage(msg) {
       }
     }
 
-    // 5. Handle active conversation steps
+    // 5. Handle active conversation steps (with response validation filter & guidance)
     if (session.step === 'parish_name') {
-      session.data.requesterName = text;
+      const nameCheck = await evaluateUserResponse('person_name', text, { label: session.data.label });
+      if (!nameCheck.valid) {
+        await replyAndTrack(remoteJid, senderDigits, nameCheck.helpMessage, { topic: 'validacao_nome' });
+        return;
+      }
+
+      const cleanName = nameCheck.normalizedValue || text.trim();
+      session.data.requesterName = cleanName;
+      await upsertContactMemory(senderDigits, {
+        remoteJid,
+        name: cleanName
+      });
       session.step = 'parish_details';
       const type = session.data.type;
+      const cfg = getSectorConfig('global');
       const hint =
         type === 'batismo'
           ? 'Informe o nome da criança, nome dos pais e a data pretendida:'
           : type === 'confissao'
-          ? `${getSectorConfig('global').confessionScheduleInfo}\n\nQual dia e horário de sua preferência?`
+          ? `${cfg.confessionScheduleInfo}\n\nQual dia e horário de sua preferência?`
+          : type === 'dizimo'
+          ? `${cfg.dizimoInfo}\n\nDeseja fazer cadastro, solicitar chave PIX ou deixar alguma observação?`
+          : type === 'doacao'
+          ? `${cfg.doacoesInfo}\n\nQual doação você gostaria de fazer ou combinar?`
           : type === 'outros'
           ? 'Digite aqui sua dúvida, recado ou solicitação para a equipe da Paróquia:'
           : 'Qual dia/horário preferido ou observação para esse atendimento?';
-      await replyDirect(remoteJid, `Obrigado, ${text}! Agora ${hint.charAt(0).toLowerCase() + hint.slice(1)}`);
+      await replyAndTrack(
+        remoteJid,
+        senderDigits,
+        `Obrigado, ${cleanName}! 🙏 Agora ${hint.charAt(0).toLowerCase() + hint.slice(1)}`,
+        { topic: session.data.type }
+      );
       return;
     }
 
     if (session.step === 'parish_details') {
       const { type, label, requesterName } = session.data;
+      const detailsCheck = await evaluateUserResponse('parish_details', text, { type, label });
+      if (!detailsCheck.valid) {
+        await replyAndTrack(remoteJid, senderDigits, detailsCheck.helpMessage, { topic: `validacao_${type}` });
+        return;
+      }
+
+      const cleanDetails = detailsCheck.normalizedValue || text.trim();
+      const finalName = requesterName || personName || senderDigits;
       await saveParishRequest({
         type,
-        requesterName: requesterName || personName || senderDigits,
+        requesterName: finalName,
         requesterPhone: senderDigits,
-        preferredDate: text,
-        details: text
+        preferredDate: cleanDetails,
+        details: cleanDetails
+      });
+      const existingRecent = Array.isArray(contactMemory?.recentRequests) ? contactMemory.recentRequests : [];
+      const newSummary = `${label}: ${cleanDetails}`.slice(0, 120);
+      await upsertContactMemory(senderDigits, {
+        remoteJid,
+        name: finalName !== senderDigits ? finalName : (contactMemory?.name || ''),
+        recentRequests: [newSummary, ...existingRecent.filter((r) => r !== newSummary)].slice(0, 5)
       });
       session.step = 'idle';
       session.data = {};
-      await replyDirect(
+      await replyAndTrack(
         remoteJid,
-        `Perfeito, ${requesterName || personName || 'irmão(ã)'}! 🙏\n\nSua solicitação de ${label} foi registrada com sucesso na Paróquia Santo Antônio.\nEntraremos em contato neste mesmo WhatsApp para confirmar.\n\nDigite "menu" sempre que precisar. Deus abençoe!`
+        senderDigits,
+        `Perfeito, ${requesterName || personName || 'irmão(ã)'}! 🙏\n\nSua solicitação de ${label} foi registrada com sucesso na Paróquia Santo Antônio.\nEntraremos em contato neste mesmo WhatsApp para confirmar.\n\nDigite "menu" sempre que precisar. Deus abençoe!`,
+        { topic: type }
       );
       return;
     }
 
     if (session.step === 'escalas_identify_phone') {
-      const candidatePhone = normalizeDigits(text);
+      const phoneCheck = await evaluateUserResponse('phone', text);
+      if (!phoneCheck.valid) {
+        await replyAndTrack(remoteJid, senderDigits, phoneCheck.helpMessage, { topic: 'validacao_telefone' });
+        return;
+      }
+      const candidatePhone = phoneCheck.normalizedValue || normalizeDigits(text);
       const matched = matchServersByPhone(candidatePhone);
       if (matched.length === 0) {
-        await replyDirect(
+        await replyAndTrack(
           remoteJid,
-          `Não encontrei nenhum cadastro com "${text}". Confira os dígitos (ou peça ao coordenador para verificar seu celular) ou digite "menu" para voltar.`
+          senderDigits,
+          `Não encontrei nenhum cadastro com "${text}". Confira os dígitos com DDD (exemplo: 63999998888), peça ao coordenador para verificar seu celular em Perfis ou digite "menu" para voltar.`,
+          { topic: 'escalas' }
         );
         return;
       }
       session.identifiedPhone = candidatePhone;
       personMatches = matched;
       personName = matched[0].name;
-      session.step = 'escalas_menu';
-      await replyDirect(
+      await upsertContactMemory(senderDigits, {
         remoteJid,
-        `Paz de Cristo, ${personName}! Cadastro identificado.\n\n` + buildEscalasMenuText(personName)
+        name: personName,
+        linkedPhone: candidatePhone,
+        sector: (SECTOR_META[matched[0].sector || 'coroinhas'] || SECTOR_META.coroinhas).name,
+        category: matched[0].category || ''
+      });
+      session.step = 'escalas_menu';
+      await replyAndTrack(
+        remoteJid,
+        senderDigits,
+        `Paz de Cristo, ${personName}! Cadastro identificado e salvo.\n\n` + buildEscalasMenuText(personName),
+        { topic: 'escalas' }
       );
       return;
     }
@@ -999,7 +1720,7 @@ async function handleIncomingMessage(msg) {
         const mySc = getPersonUpcomingSchedules(personMatches);
         if (mySc.length === 0) {
           session.step = 'idle';
-          await replyDirect(remoteJid, `Você não possui escalas futuras agendadas no momento para solicitar troca.`);
+          await replyAndTrack(remoteJid, senderDigits, `Você não possui escalas futuras agendadas no momento para solicitar troca.`, { topic: 'escalas' });
           return;
         }
         if (mySc.length === 1) {
@@ -1007,9 +1728,11 @@ async function handleIncomingMessage(msg) {
           const chapelName = chapelsMap.get(sc.chapelId)?.name || 'Capela';
           session.step = 'swap_reason';
           session.data = { schedule: sc };
-          await replyDirect(
+          await replyAndTrack(
             remoteJid,
-            `Escala selecionada: ${chapelName} (${formatBrDate(sc.date)} às ${sc.time || ''}).\n\nQual é o motivo da troca?`
+            senderDigits,
+            `Escala selecionada: ${chapelName} (${formatBrDate(sc.date)} às ${sc.time || ''}).\n\nQual é o motivo da troca? (Exemplo: Preciso viajar ou estarei trabalhando neste horário)`,
+            { topic: 'escalas' }
           );
           return;
         }
@@ -1022,7 +1745,7 @@ async function handleIncomingMessage(msg) {
           .join('\n');
         session.step = 'swap_pick_schedule';
         session.data = { choices: mySc };
-        await replyDirect(remoteJid, `Em qual dessas escalas você deseja pedir troca? Responda com o número:\n\n${listText}`);
+        await replyAndTrack(remoteJid, senderDigits, `Em qual dessas escalas você deseja pedir troca? Responda apenas com o número (ex: 1):\n\n${listText}`, { topic: 'escalas' });
         return;
       }
 
@@ -1037,9 +1760,11 @@ async function handleIncomingMessage(msg) {
             mySc.length > 0
               ? `\n\nNa sua próxima escala (${chapelsMap.get(mySc[0].chapelId)?.name || 'Capela'}, ${formatBrDate(mySc[0].date)}), você está como ${getRoleInSchedule(mySc[0], personMatches)}.`
               : '';
-          await replyDirect(
+          await replyAndTrack(
             remoteJid,
-            `${personName}, verifiquei no sistema e você não foi escalado como Principal em nenhuma escala ativa no momento.${extra}`
+            senderDigits,
+            `${personName}, verifiquei no sistema e você não foi escalado como Principal em nenhuma escala ativa no momento.${extra}`,
+            { topic: 'escalas' }
           );
           return;
         }
@@ -1049,9 +1774,11 @@ async function handleIncomingMessage(msg) {
           const secName = (SECTOR_META[sc.sector || 'coroinhas'] || SECTOR_META.coroinhas).name;
           return `• [${secName}] ${chapelName} (${formatBrDate(sc.date)} às ${sc.time || ''})\n  Código do Relatório: ${sc.code}`;
         });
-        await replyDirect(
+        await replyAndTrack(
           remoteJid,
-          `Paz de Cristo, ${personName}! 🔑\n\nVocê está como Principal nas seguintes escalas:\n\n${lines.join('\n\n')}\n\nPara enviar o relatório no site, clique em "Enviar Relatório (Código)" na aba do seu setor.`
+          senderDigits,
+          `Paz de Cristo, ${personName}! 🔑\n\nVocê está como Principal nas seguintes escalas:\n\n${lines.join('\n\n')}\n\nPara enviar o relatório no site, clique em "Enviar Relatório (Código)" na aba do seu setor.`,
+          { topic: 'escalas' }
         );
         return;
       }
@@ -1060,7 +1787,7 @@ async function handleIncomingMessage(msg) {
         session.step = 'idle';
         const mySc = getPersonUpcomingSchedules(personMatches);
         if (mySc.length === 0) {
-          await replyDirect(remoteJid, `Paz de Cristo, ${personName}! Você não possui escalas futuras agendadas no momento.`);
+          await replyAndTrack(remoteJid, senderDigits, `Paz de Cristo, ${personName}! Você não possui escalas futuras agendadas no momento.`, { topic: 'escalas' });
           return;
         }
         const lines = mySc.map((sc, i) => {
@@ -1068,30 +1795,52 @@ async function handleIncomingMessage(msg) {
           const secName = (SECTOR_META[sc.sector || 'coroinhas'] || SECTOR_META.coroinhas).name;
           return `${i + 1}. [${secName}] ${chapelName} • ${formatBrDate(sc.date)} às ${sc.time || ''} — ${getRoleInSchedule(sc, personMatches)}`;
         });
-        await replyDirect(remoteJid, `Paz de Cristo, ${personName}! Suas próximas escalas:\n\n${lines.join('\n')}`);
+        await replyAndTrack(remoteJid, senderDigits, `Paz de Cristo, ${personName}! Suas próximas escalas:\n\n${lines.join('\n')}`, { topic: 'escalas' });
         return;
       }
 
-      await replyDirect(remoteJid, `Escolha 1 (Troca), 2 (Código do Relatório) ou 3 (Ver minhas escalas), ou digite "menu" para voltar.`);
+      await replyAndTrack(
+        remoteJid,
+        senderDigits,
+        `Paz de Cristo! 🙏 Não identifiquei a opção "${text}" no menu de Escalas.\n\nResponda apenas com:\n1 para pedir Troca\n2 para pegar o Código do Relatório\n3 para Ver minhas escalas\n\n(Ou digite "menu" para voltar ao início.)`,
+        { topic: 'escalas' }
+      );
       return;
     }
 
     if (session.step === 'swap_pick_schedule') {
-      const idx = parseInt(norm, 10) - 1;
       const choices = session.data.choices || [];
-      if (Number.isNaN(idx) || idx < 0 || idx >= choices.length) {
-        await replyDirect(remoteJid, `Número inválido. Escolha de 1 a ${choices.length} ou digite "menu".`);
+      const idx = /^\d+$/.test(norm) ? parseInt(norm, 10) - 1 : -1;
+      if (idx < 0 || idx >= choices.length) {
+        await replyAndTrack(
+          remoteJid,
+          senderDigits,
+          `Paz de Cristo! 🙏 "${text}" não é uma opção válida.\n\nDigite apenas um número de 1 a ${choices.length} (exemplo: 1) ou digite "menu" para cancelar.`,
+          { topic: 'escalas' }
+        );
         return;
       }
       const sc = choices[idx];
       const chapelName = chapelsMap.get(sc.chapelId)?.name || 'Capela';
       session.step = 'swap_reason';
       session.data = { schedule: sc };
-      await replyDirect(remoteJid, `Certo! Qual é o motivo da troca para ${chapelName} (${formatBrDate(sc.date)})?`);
+      await replyAndTrack(
+        remoteJid,
+        senderDigits,
+        `Certo! Qual é o motivo da troca para ${chapelName} (${formatBrDate(sc.date)})? (Exemplo: Compromisso familiar ou trabalho)`,
+        { topic: 'escalas' }
+      );
       return;
     }
 
     if (session.step === 'swap_reason') {
+      const reasonCheck = await evaluateUserResponse('swap_reason', text);
+      if (!reasonCheck.valid) {
+        await replyAndTrack(remoteJid, senderDigits, reasonCheck.helpMessage, { topic: 'validacao_troca' });
+        return;
+      }
+
+      const cleanReason = reasonCheck.normalizedValue || text.trim();
       const sc = session.data.schedule;
       const requester =
         personMatches.find(
@@ -1101,25 +1850,29 @@ async function handleIncomingMessage(msg) {
             (sc.serverIds || []).includes(sv.id)
         ) || personMatches[0];
 
-      const res = await initiateSwapRequest(sc, requester, text, senderDigits);
+      const res = await initiateSwapRequest(sc, requester, cleanReason, senderDigits);
       session.step = 'idle';
       session.data = {};
 
       if (res.alreadyExists) {
-        await replyDirect(
+        await replyAndTrack(
           remoteJid,
-          `Já existe uma solicitação de troca aberta para esta escala (código ${res.swapRequest.code}). Para evitar mensagens repetidas, estamos aguardando um colega aceitar!`
+          senderDigits,
+          `Já existe uma solicitação de troca aberta para esta escala (código ${res.swapRequest.code}). Para evitar mensagens repetidas, estamos aguardando um colega aceitar!`,
+          { topic: 'escalas' }
         );
         return;
       }
 
       if (res.ok) {
-        await replyDirect(
+        await replyAndTrack(
           remoteJid,
-          `Solicitação de troca registrada, ${requester.name}! ✅\n\nMotivo: "${text}"\nEnviei uma única solicitação via WhatsApp para ${res.notifiedCount} colega(s) disponível(is).\n\nAssim que alguém aceitar, a escala será atualizada no sistema e avisaremos você e os coordenadores!`
+          senderDigits,
+          `Solicitação de troca registrada, ${requester.name}! ✅\n\nMotivo: "${cleanReason}"\nEnviei uma única solicitação via WhatsApp para ${res.notifiedCount} colega(s) disponível(is).\n\nAssim que alguém aceitar, a escala será atualizada no sistema e avisaremos você e os coordenadores!`,
+          { topic: 'escalas' }
         );
       } else {
-        await replyDirect(remoteJid, `Não foi possível registrar a troca agora. Tente novamente mais tarde.`);
+        await replyAndTrack(remoteJid, senderDigits, `Não foi possível registrar a troca agora. Tente novamente mais tarde.`, { topic: 'escalas' });
       }
       return;
     }
@@ -1142,11 +1895,21 @@ async function handleIncomingMessage(msg) {
             : type === 'outros'
             ? 'Pode digitar aqui sua dúvida, recado ou solicitação que vamos responder e encaminhar para a equipe da Paróquia!'
             : 'Qual dia/horário preferido e observação?';
-        await replyDirect(remoteJid, `Paz de Cristo, ${personName}! Vamos registrar sua solicitação de ${label}.\n\n${extra}`);
+        await replyAndTrack(
+          remoteJid,
+          senderDigits,
+          `Paz de Cristo, ${personName}! Vamos registrar sua solicitação de ${label}.\n\n${extra}`,
+          { topic: type }
+        );
       } else {
         session.step = 'parish_name';
         session.data = { type, label };
-        await replyDirect(remoteJid, `Paz de Cristo! Com alegria vamos atender seu pedido de ${label}.\n\nQual é o seu nome completo?`);
+        await replyAndTrack(
+          remoteJid,
+          senderDigits,
+          `Paz de Cristo! Com alegria vamos atender seu pedido de ${label}.\n\nQual é o seu nome completo? (Exemplo: Maria Aparecida da Silva)`,
+          { topic: type }
+        );
       }
     };
 
@@ -1162,39 +1925,54 @@ async function handleIncomingMessage(msg) {
       if (personMatches.length === 0) {
         session.step = 'escalas_identify_phone';
         session.data = {};
-        await replyDirect(
+        await replyAndTrack(
           remoteJid,
-          `Paz de Cristo! Para acessar suas escalas, informar troca ou pegar seu código de relatório, me diga o seu número de telefone cadastrado (com DDD ou seu número de cadastro):`
+          senderDigits,
+          `Paz de Cristo! Para acessar suas escalas, informar troca ou pegar seu código de relatório, me diga o seu número de telefone cadastrado com DDD (exemplo: 63999998888):`,
+          { topic: 'escalas' }
         );
         return;
       }
       session.step = 'escalas_menu';
       session.data = {};
-      await replyDirect(remoteJid, buildEscalasMenuText(personName));
+      await replyAndTrack(remoteJid, senderDigits, buildEscalasMenuText(personName), { topic: 'escalas' });
       return;
     }
 
     // 7. Greeting -> Welcome message + Options menu
-    if (/^(oi|ola|olá|bom dia|boa tarde|boa noite|paz|paz de cristo|salve maria|ajuda|start)$/i.test(norm)) {
-      await sendWelcomeThenMenu(remoteJid, personName, session);
+    if (/^(oi|ola|bom dia|boa tarde|boa noite|paz|paz de cristo|salve maria|ajuda|start)$/i.test(norm)) {
+      await sendWelcomeThenMenu(remoteJid, personName, session, personMatches, contactMemory, senderDigits);
       return;
     }
 
-    // 8. Conversational Gemini AI for Catholic faith & parish questions (when Gemini API Key is set)
-    const aiReply = await callGeminiAssistant(session, text);
+    // 7b. Help users who send keyboard-smash / unreadable gibberish while idle
+    if (isKeyboardSmashOrGibberish(norm) && text.length < 24) {
+      await replyAndTrack(
+        remoteJid,
+        senderDigits,
+        `Paz de Cristo! 🙏 Não consegui entender a mensagem "${text}".\n\nEscreva sua pergunta com palavras claras ou escolha um dos números abaixo:\n\n` +
+          buildMainMenuText(),
+        { recordText: `[Orientou usuário após mensagem incompreensível: ${text}]` }
+      );
+      session.welcomed = true;
+      return;
+    }
+
+    // 8. Conversational Gemini AI for Catholic faith, general doubts & remembered past conversations
+    const personContext = buildPersonContextSummary(personMatches, contactMemory);
+    const aiReply = await callGeminiAssistant(session, text, personContext);
     if (aiReply) {
       if (!session.welcomed) {
-        await replyDirect(remoteJid, buildWelcomeText(personName));
+        await replyDirect(remoteJid, buildWelcomeText(personName, personMatches, contactMemory, text));
         await new Promise((resolve) => setTimeout(resolve, 600));
         session.welcomed = true;
       }
-      session.history.push({ role: 'model', parts: [{ text: aiReply }] });
-      await replyDirect(remoteJid, aiReply);
+      await replyAndTrack(remoteJid, senderDigits, aiReply, { topic: 'ia_livre' });
       return;
     }
 
     // Default: Welcome message + Options menu
-    await sendWelcomeThenMenu(remoteJid, personName, session);
+    await sendWelcomeThenMenu(remoteJid, personName, session, personMatches, contactMemory, senderDigits);
   } catch (err) {
     console.error('Erro ao processar mensagem recebida:', err);
   }
@@ -1228,6 +2006,18 @@ function startFirestoreListeners() {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     swapRequestsList = list;
+  });
+
+  onSnapshot(collection(db, 'whatsapp_contacts'), (snap) => {
+    const next = new Map();
+    snap.docs.forEach((d) => next.set(d.id, { id: d.id, ...d.data() }));
+    whatsappContactsMap = next;
+  });
+
+  onSnapshot(collection(db, 'parish_requests'), (snap) => {
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    parishRequestsList = list;
   });
 
   // Real-time manual/web dispatch queue
